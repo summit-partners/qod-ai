@@ -1,0 +1,25 @@
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+**/.DS_Store
+._*
+.vscode/**
+__pycache__/
+**/__pycache__/**
+
+# Data repository #
+###################
+data/**
+models/**
+docs/**
+
+# Terraform #
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+tf.out
