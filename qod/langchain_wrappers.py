@@ -134,7 +134,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             n_ctx=2048,
             max_tokens=500,
             temperature=0,
-            n_threads=-1,
+            n_threads=8,
             n_batch=2048,
             client=None,
             n_parts=-1,
@@ -214,7 +214,6 @@ def get_vectorstore(
             embedding=embeddings,
             persist_directory=db_directory,
         )
-        vectorstore.persist()
     else:
         if db_directory is None:
             raise Exception(

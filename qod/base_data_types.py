@@ -1,8 +1,8 @@
 from enum import IntEnum
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 
-class BaseAttributeType(ABC, IntEnum):
+class BaseAttributeType(IntEnum):
     @abstractmethod
     def get_attributes(self):
         pass

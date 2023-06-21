@@ -5,6 +5,7 @@ from qod.base_data_types import BaseAttributeType
 import typer
 import sys
 import time
+import secrets
 
 from langchain.embeddings import (
     LlamaCppEmbeddings,
@@ -22,6 +23,7 @@ from qod.embeddings_data_types import EmbeddingsType, EmbeddingsAttributes
 from qod.llm_data_types import LLMType, LLMAttributes
 from qod.chain_data_types import ChainType, ChainAttributes
 from qod.langchain_wrappers import get_llm, get_embeddings, get_chain, get_vectorstore
+from qod.chat_session import ChatSession
 
 
 def get_selected_attribute_value(
@@ -158,6 +160,19 @@ def main():
     # Select the chain type
     qa = select_chain(llm, vectorstore)
 
+    chat_session = ChatSession(
+        csid="csid_" + secrets.token_hex(12),
+        llm=llm,
+        embeddings=embedding,
+        chain=qa,
+        vectorstore=vectorstore,
+        history=[],
+        documents_directory="",  # TODO
+        db_directory=db_directory,
+        llm_type=1,  # TODO
+        embeddings_type=1,  # TODO
+        chain_type=1,  # TODO
+    )
     red = "\033[0;31m"
     yellow = "\033[0;33m"
     green = "\033[0;32m"
@@ -197,7 +212,7 @@ questions."
             continue
 
         answer_start = time.time()
-        result = qa({"question": query, "chat_history": chat_history})
+        result = chat_session.chain({"question": query, "chat_history": chat_history})
         answer_end = time.time()
         print()
         print(f"{blue}Answer: " + result["answer"])

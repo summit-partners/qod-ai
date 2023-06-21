@@ -23,3 +23,6 @@ docs/**
 *.tfstate.*
 
 tf.out
+
+# Chroma files #
+.chroma/**
