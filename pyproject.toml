@@ -12,6 +12,7 @@ gunicorn = "*"
 pydantic = "*"
 typer = "*"
 uvicorn = { extras = ["standard"], version = "*" }
+langchain = "^0.0.231"
 
 
 [tool.poetry.group.dev.dependencies]
