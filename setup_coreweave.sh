@@ -16,5 +16,15 @@ sudo apt update
 sudo apt install -y build-essential checkinstall
 sudo apt install -y libreadline-gplv2-dev libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev liblzma-dev libffi-dev
 
+# CUDA
+sudo apt install linux-headers-$(uname -r)
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt install -y cuda nvidia-gds
+echo 'export PATH=/usr/local/cuda-12.2/bin${PATH:+:${PATH}}' >>~/.bashrc
+sudo cp /lib/udev/rules.d/40-vm-hotadd.rules /etc/udev/rules.d
+sudo sed -i '/SUBSYSTEM=="memory", ACTION=="add"/d' /etc/udev/rules.d/40-vm-hotadd.rules
+sudo systemctl enable nvidia-persistenced
+
 make setup
-echo 'Run \`source \"$HOME/.bashrc\"\` to refresh the environment'
+echo 'Please reboot the machine.'
