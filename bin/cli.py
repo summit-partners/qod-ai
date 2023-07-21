@@ -208,7 +208,7 @@ questions."
             llm = select_llm()
             continue
         if query == "chain":
-            qa = select_chain(llm)
+            qa = select_chain(llm, vectorstore)
             continue
 
         answer_start = time.time()

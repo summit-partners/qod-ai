@@ -12,7 +12,10 @@ gunicorn = "*"
 pydantic = "*"
 typer = "*"
 uvicorn = { extras = ["standard"], version = "*" }
-langchain = "^0.0.231"
+langchain = "^0.0.238"
+pysqlite3-binary = "^0.5.0"
+chromadb = "^0.4.2"
+sentence-transformers = "^2.2.2"
 
 
 [tool.poetry.group.dev.dependencies]

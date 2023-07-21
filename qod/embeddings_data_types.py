@@ -61,7 +61,7 @@ EMBEDDINGS_ATTRIBUTES = {
     EmbeddingsType.SENTENCE_TRANSFORMER_HF: EmbeddingsAttributes(
         type=EmbeddingsType.SENTENCE_TRANSFORMER_HF,
         family=EmbeddingsFamily.HUGGING_FACE,
-        model="all-MiniLM-L6-v2",
+        model="models/sentence_tansformers/all-MiniLM-L6-v2_local/",
         friendly_name="Hugging Face Sentence Transformer",
     ),
     EmbeddingsType.VICUNA_13B: EmbeddingsAttributes(
