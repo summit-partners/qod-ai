@@ -1,6 +1,7 @@
 import os
 import hashlib
 import shutil
+import sys
 from typing import Union, List, Optional, Tuple
 
 from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
@@ -31,6 +32,10 @@ from qod.llm_data_types import LLMAttributes, LLMFamily
 from qod.chain_data_types import ChainAttributes, ChainType
 
 
+__import__("pysqlite3")
+sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+
+
 def chunk_documents(
     directory, chunk_size=500, chunk_overlap=100
 ) -> Tuple[List[Document], List[str]]:
@@ -45,17 +50,17 @@ def chunk_documents(
     files = []
     for file in os.listdir(directory):
         if file.endswith(".pdf"):
-            pdf_path = "./docs/" + file
+            pdf_path = os.path.join(directory, file)
             loader_pdf = PyPDFLoader(pdf_path)
             loaders.extend(loader_pdf.load())
             files.append(file)
         elif file.endswith(".docx") or file.endswith(".doc"):
-            doc_path = "./docs/" + file
+            doc_path = os.path.join(directory, file)
             loader_doc = Docx2txtLoader(doc_path)
             loaders.extend(loader_doc.load())
             files.append(file)
         elif file.endswith(".txt"):
-            text_path = "./docs/" + file
+            text_path = os.path.join(directory, file)
             loader_txt = TextLoader(text_path)
             loaders.extend(loader_txt.load())
             files.append(file)
@@ -76,7 +81,9 @@ def get_embeddings(
     :return An embedding object
     """
     if attr.family == EmbeddingsFamily.HUGGING_FACE:
-        return HuggingFaceEmbeddings(model_name=attr.model)
+        return HuggingFaceEmbeddings(
+            model_name=attr.model, model_kwargs={"device": "cuda"}
+        )
 
     if attr.family == EmbeddingsFamily.LLAMA_CPP:
         return LlamaCppEmbeddings(
@@ -91,7 +98,7 @@ def get_embeddings(
             logits_all=False,
             vocab_only=False,
             use_mlock=False,
-            n_gpu_layers=None,
+            n_gpu_layers=40,
         )
 
     if attr.family == EmbeddingsFamily.OPEN_AI:
@@ -113,7 +120,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             model=attr.model,
             callbacks=[StreamingStdOutCallbackHandler()],
             verbose=True,
-            n_ctx=2048,
+            max_tokens=2048,
             n_threads=-1,
             backend=None,
             n_parts=-1,
@@ -134,8 +141,8 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             n_ctx=2048,
             max_tokens=500,
             temperature=0,
-            n_threads=8,
-            n_batch=2048,
+            n_threads=-1,
+            n_batch=512,
             client=None,
             n_parts=-1,
             seed=-1,
@@ -143,7 +150,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             logits_all=False,
             vocab_only=False,
             use_mlock=False,
-            n_gpu_layers=None,
+            n_gpu_layers=43,
             suffix=None,
             logprobs=None,
         )

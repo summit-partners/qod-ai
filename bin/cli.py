@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3i
 
 from typing import Union, Optional, Tuple, Type
 from qod.base_data_types import BaseAttributeType
@@ -208,8 +208,7 @@ questions."
             llm = select_llm()
             continue
         if query == "chain":
-            qa = select_chain(llm)
-            continue
+            qa = select_chain(llm, vectorstore)
 
         answer_start = time.time()
         result = chat_session.chain({"question": query, "chat_history": chat_history})

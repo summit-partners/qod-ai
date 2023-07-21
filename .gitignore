@@ -12,7 +12,8 @@ __pycache__/
 ###################
 data/**
 models/**
-docs/**
+docs*/**
+db*/**
 
 # Terraform #
 # Local .terraform directories
