@@ -139,7 +139,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             callback_manager=CallbackManager([StreamingStdOutCallbackHandler()]),
             verbose=True,
             n_ctx=2048,
-            max_tokens=500,
+            max_tokens=2048,
             temperature=0,
             n_threads=-1,
             n_batch=512,
@@ -150,7 +150,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             logits_all=False,
             vocab_only=False,
             use_mlock=False,
-            n_gpu_layers=43,
+            n_gpu_layers=75,
             suffix=None,
             logprobs=None,
         )

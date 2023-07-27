@@ -16,10 +16,15 @@ class LLMFamily(IntEnum):
 class LLMType(BaseAttributeType):
     """Enum for the type of large language model"""
 
-    VICUNA_13B = 1
-    GROOVY = 2
-    MPT_7B = 3
-    TEXT_DAVINCI_3 = 4
+    LLAMA2_70B = 1
+    LLAMA2_13B = 2
+    FALCON = 3
+    NOUS_HERMES_13B = 4
+    VICUNA_13B = 5
+    WIZARDLM_13B = 6
+    LLAMA1_UPSTAGE_65B = 7
+    GPT4_ALPACA_LORA_65B = 8
+    GPLATY_30B = 9
 
     def get_attributes(self) -> "LLMAttributes":
         """Get the attributes associated with an LLM type"""
@@ -55,13 +60,69 @@ class LLMAttributes:
 
 # Mapping from an LLM type to its attributes
 LLM_ATTRIBUTES = {
+    LLMType.LLAMA2_70B: LLMAttributes(
+        type=LLMType.LLAMA2_70B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/llama2-70b/llama-2-70b-chat.ggmlv3.q5_0.bin",
+        friendly_name="LLAMA2 70B",
+    ),
+    LLMType.LLAMA2_13B: LLMAttributes(
+        type=LLMType.LLAMA2_13B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/llama2-13b/llama-2-13b-chat.ggmlv3.q8_0.bin",
+        friendly_name="LLAMA2 13B",
+    ),
+    LLMType.FALCON: LLMAttributes(
+        type=LLMType.FALCON,
+        family=LLMFamily.LLAMA,
+        model="models/inference/falcon/ggml-model-gpt4all-falcon-q4_0.bin",
+        friendly_name="Falcon",
+    ),
+    LLMType.NOUS_HERMES_13B: LLMAttributes(
+        type=LLMType.NOUS_HERMES_13B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/nous-hermes-13b/nous-hermes-13b.ggmlv3.q4_0.bin",
+        friendly_name="Nous-Hermes 13B",
+    ),
     LLMType.VICUNA_13B: LLMAttributes(
         type=LLMType.VICUNA_13B,
         family=LLMFamily.LLAMA,
-        model="models/vicuna/ggml-vic13b-q5_1.bin",
+        model="models/inference/vicuna/ggml-vic13b-q5_1.bin",
         friendly_name="Vicuna 13B",
     ),
-    LLMType.GROOVY: LLMAttributes(
+    LLMType.WIZARDLM_13B: LLMAttributes(
+        type=LLMType.WIZARDLM_13B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/wizardlm-13b/wizardlm-13b-v1.2.ggmlv3.q8_0.bin",
+        friendly_name="WizardLM 13B",
+    ),
+    LLMType.LLAMA1_UPSTAGE_65B: LLMAttributes(
+        type=LLMType.LLAMA1_UPSTAGE_65B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/llama1-upstage/upstage-llama-65b-instruct.ggmlv3.q5_K_M.bin",
+        friendly_name="Llama1-Upstage 65B",
+    ),
+    LLMType.GPT4_ALPACA_LORA_65B: LLMAttributes(
+        type=LLMType.GPT4_ALPACA_LORA_65B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/gpt4-alpaca-lora/gpt4-alpaca-lora_mlp-65B.ggmlv3.q5_K_S.bin",
+        friendly_name="GPT4 Alpaca Lora 65B",
+    ),
+    LLMType.GPLATY_30B: LLMAttributes(
+        type=LLMType.GPLATY_30B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/gplaty-30b/gplatty-30b.ggmlv3.q8_0.bin",
+        friendly_name="Gplaty 30B",
+    ),
+}
+"""
+    LLMType.GROOVY
+    LLMType.GPT4_ALPACA_LORA_65B: LLMAttributes(
+        type=LLMType.GPT4_ALPACA_LORA_65B,
+        family=LLMFamily.LLAMA,
+        model="models/inference/gpt4-alpaca-lora/gpt4-alpaca-lora_mlp-65B.ggmlv3.q5_K_S.bin",
+        friendly_name="GPT4 Alpaca Lora 65B",
+    ),: LLMAttributes(
         type=LLMType.GROOVY,
         family=LLMFamily.GPT4ALL,
         model="",
@@ -79,4 +140,4 @@ LLM_ATTRIBUTES = {
         model="text-davinci-003",
         friendly_name="Text DaVinvi 3",
     ),
-}
+"""
