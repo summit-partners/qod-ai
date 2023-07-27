@@ -37,40 +37,50 @@ sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 
 def chunk_documents(
-    directory, chunk_size=500, chunk_overlap=100
+    path, chunk_size=500, chunk_overlap=100
 ) -> Tuple[List[Document], List[str]]:
     """Convert pdf, docx and txt document in a directory into text chunks
-    :param directory: Path of the folder including the documents to process
+    :param path: Path of the document to process or a folder contaning
+    the documents to process
     :param chunk_size: maximum amount of chracter in a chunk
     :param chunk_overlap: Amount of character overlaping between successive chunks
     :return chunks: List of text chunks
     :return files: List of name of the files processed
     """
+    processed_files = []
+    file_paths = []
     loaders = []
-    files = []
-    for file in os.listdir(directory):
-        if file.endswith(".pdf"):
-            pdf_path = os.path.join(directory, file)
-            loader_pdf = PyPDFLoader(pdf_path)
+
+    # Getting the name of the file to process
+    if os.path.isdir(path):
+        file_paths = [os.path.join(path, file_name) for file_name in os.listdir(path)]
+    elif os.path.isfile(path):
+        file_paths = [path]
+    else:
+        raise ValueError(
+            f"{path} is not a valid path for the documents \
+to proceed"
+        )
+    for file_path in file_paths:
+        print(f"Segmenting file {file_path} into chunks")
+        if file_path.endswith(".pdf"):
+            loader_pdf = PyPDFLoader(file_path)
             loaders.extend(loader_pdf.load())
-            files.append(file)
-        elif file.endswith(".docx") or file.endswith(".doc"):
-            doc_path = os.path.join(directory, file)
-            loader_doc = Docx2txtLoader(doc_path)
+            processed_files.append(file_path)
+        elif file_path.endswith(".docx") or file_path.endswith(".doc"):
+            loader_doc = Docx2txtLoader(file_path)
             loaders.extend(loader_doc.load())
-            files.append(file)
-        elif file.endswith(".txt"):
-            text_path = os.path.join(directory, file)
-            loader_txt = TextLoader(text_path)
+            processed_files.append(file_path)
+        elif file_path.endswith(".txt"):
+            loader_txt = TextLoader(file_path)
             loaders.extend(loader_txt.load())
-            files.append(file)
+            processed_files.append(file_path)
 
     char_text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
     chunks = char_text_splitter.split_documents(loaders)
-    print(f"{len(files)} documents have been converted into {len(chunks)} chunks")
-    return chunks, files
+    return chunks, processed_files
 
 
 def get_embeddings(
@@ -139,7 +149,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             callback_manager=CallbackManager([StreamingStdOutCallbackHandler()]),
             verbose=True,
             n_ctx=2048,
-            max_tokens=500,
+            max_tokens=2048,
             temperature=0,
             n_threads=-1,
             n_batch=512,
@@ -150,7 +160,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             logits_all=False,
             vocab_only=False,
             use_mlock=False,
-            n_gpu_layers=43,
+            n_gpu_layers=75,
             suffix=None,
             logprobs=None,
         )
@@ -202,7 +212,7 @@ def get_vectorstore(
     """
     if documents_directory is not None:
         print(f"Converting documents in {documents_directory:} into text chunks")
-        documents, files = chunk_documents(directory=documents_directory)
+        documents, files = chunk_documents(path=documents_directory)
         # Create a directory name from the vectorstore if none was provided
         if db_directory is None:
             db_directory = hashlib.md5(

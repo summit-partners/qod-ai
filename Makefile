@@ -41,3 +41,7 @@ server:
 .PHONY: cli
 cli:
 	$(POETRY) python -m bin.cli
+
+.PHONY: cli_summary
+cli_summary:
+	$(POETRY) python -m bin.cli_summary
