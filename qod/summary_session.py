@@ -25,6 +25,14 @@ class SummarySession:
         documents: List[Document],
         chain_type: ChainType,
     ):
+        """Constructor for a SummarySession
+        :param ssid: Identifier for a summary session
+        :param llm: Large language model used by the session
+        :param document_path: Path of the document to summarize
+        documents: List of chunks of the document to
+        summarize #TODO - Fix that
+        :param chain_type: Type of chain used to produce the summary
+        """
         self.ssid = ssid
         self.llm = llm
         self.document_path = document_path
@@ -32,25 +40,34 @@ class SummarySession:
         self.chain_type = chain_type
 
     def summarize_documents(self) -> str:
-        """ """
+        """Use the LLM to compute and return a summary of the document
+        :return A summary of the document #TODO - Add intermediary results
+        """
+        # Call the summarize function associated with the chain type
+        # of the session
         if self.chain_type == ChainType.STUFFED:
             return self._summarize_documents_stuffed()
         elif self.chain_type == ChainType.MAP_REDUCE:
             return self._summarize_documents_reduce()
         elif self.chain_type == ChainType.REFINE:
             return self._summarize_documents_refine()
-        print("This chain is not supported yet")
+        print(
+            "The chain selected is not supported. Please select \
+another type of chain."
+        )
         return ""
 
     def _summarize_documents_stuffed(self) -> str:
-        """ """
-        # Settinp up the chain
+        """Summarize the document using a stuffed chain.
+        :return A summary of the document #TODO - Add intermediary results
+        """
+        # Setting up the chain
         prompt = PromptTemplate.from_template(
             'Summarize this content as a text: "{context}"\n\n' "Summary: "
         )
-        # Setting up the chain
         chain = LLMChain(prompt=prompt, llm=self.llm)
-        # Getting the context
+
+        # Getting the context as a single blurb
         context = ""
         for document in self.documents:
             context += document.page_content
@@ -70,7 +87,15 @@ long documents (e.g., refine)"
     def _get_summaries_as_context(
         self, summaries: List[str], prompt: PromptTemplate
     ) -> List[str]:
-        """ """
+        """Convert a list of summaries into a list of context to be used in a prompt.
+        The size of the contexts in the produced list is determined according to the
+        maximum context size of the LLM of the session.
+        :param summaries: List of summaries (e.g., coming from a reduce chain)
+        :param prompt: Prompt template in which the calculated context will be used
+        :return A list of string that each capture a sequence of contexts
+        that can be inserted
+        in a prompt for a synthesis chain.
+        """
         summaries_as_context = []
         context = ""
         for summary in summaries:
@@ -94,21 +119,22 @@ long documents (e.g., refine)"
         return summaries_as_context
 
     def _summarize_documents_reduce(self):
-        """ """
-        max_level = 3
-        # Setting up the LLM chains
+        """Summarize the document using a reduce chain.
+        :return A summary of the document #TODO - Add intermediary results"""
+        # The max recursion level indicates the maximjm passes we want to
+        #  do over the document or its summaries
+        max_pass = 3  # TODO - add as an argument to the method
+
+        # The reduce chain is used to extract a summary for each
+        # chunk of the document to summarize
         reduce_prompt = PromptTemplate.from_template(
             "Write a concise summary of the following: \n\n"
             '"{context}"\n\n'
             "CONCISE SUMMARY: "
         )
         llm_reduce = LLMChain(prompt=reduce_prompt, llm=self.llm)
-        # collapse_prompt = PromptTemplate.from_template(
-        #     "Collapse the following context: \n\n"
-        #     '"{context}"\n\n'
-        #     "COLLAPSED CONTEXT: "
-        # )
-        # llm_collapse = LLMChain(prompt=collapse_prompt, llm=self.llm)
+        # The synthesize chain is used to collapse summaries assembled
+        # by the reduce chain or by another synthesize chain
         synthesize_prompt = PromptTemplate.from_template(
             "Given the following pieces of content extracted from \
 a long document, write a final summary for the long document:\n\n"
@@ -120,23 +146,23 @@ a long document, write a final summary for the long document:\n\n"
         summaries = []
         summaries_as_context = []
         chunks = [document.page_content for document in self.documents]
-        level = 0  # TODO - DEFINE THE CONTEXT  OF MAX LEVEL
-        while chunks and level < max_level:
+        nb_pass = 0
+        while chunks and nb_pass < max_pass:
             context = chunks.pop(0)
             my_prompt = (
                 reduce_prompt.format(context=context)
-                if level == 0
+                if nb_pass == 0
                 else synthesize_prompt.format(summaries=context)
             )
             print(f"\n\nPrompt: {my_prompt}\n\n")
             summary = (
-                llm_reduce.run(context) if level == 0 else llm_synthesize.run(context)
+                llm_reduce.run(context) if nb_pass == 0 else llm_synthesize.run(context)
             )
             summaries.append(summary)
             # If all chunks have been processed, we need to that
             #  the summaries do not exceed the LLM context size
             if not chunks:
-                print(f"### Level {level}")
+                print(f"### Pass {nb_pass}")
                 summaries_as_context = self._get_summaries_as_context(
                     summaries=summaries, prompt=synthesize_prompt
                 )
@@ -144,12 +170,12 @@ a long document, write a final summary for the long document:\n\n"
                 # They must be collated and reprocessed
                 if len(summaries_as_context) > 1:
                     print("ADDING A LEVEL OF RECURSION!!!")
-                    level += 1
+                    nb_pass += 1
                     for sum_as_ctxt in summaries_as_context:
                         chunks.append(sum_as_ctxt)
                         summaries = []
         # We exceed the maximum level of recursion
-        if level >= max_level:
+        if nb_pass >= max_pass:
             print(
                 "The reduce chain exceeded its maximum level of recursion. \
 We recommend using a refine chain instead."
@@ -160,7 +186,8 @@ We recommend using a refine chain instead."
         return llm_synthesize.run(summaries_as_context[0])
 
     def _summarize_documents_refine(self) -> str:
-        """ """
+        """Summarize the document using a refine chain.
+        :return A summary of the document #TODO - Add intermediary results"""
         # Setting up the LLM chains
         refine_start_prompt = PromptTemplate.from_template(
             'Summarize this content: "{context}"\n\n' "Summary: "
