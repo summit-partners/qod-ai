@@ -2,6 +2,7 @@ import os
 import hashlib
 import shutil
 import sys
+import re
 from typing import Union, List, Optional, Tuple
 
 from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
@@ -23,9 +24,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.chains.conversational_retrieval.prompts import CONDENSE_QUESTION_PROMPT
 from langchain import LLMChain
 from langchain.chains.question_answering import load_qa_chain
-from langchain.text_splitter import (
-    RecursiveCharacterTextSplitter,
-)
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from qod.embeddings_data_types import EmbeddingsAttributes, EmbeddingsFamily
 from qod.llm_data_types import LLMAttributes, LLMFamily
@@ -50,12 +49,21 @@ def chunk_documents(
     processed_files = []
     file_paths = []
     loaders = []
-
+    first_page = 0
+    last_page = float("Inf")
     # Getting the name of the file to process
     if os.path.isdir(path):
         file_paths = [os.path.join(path, file_name) for file_name in os.listdir(path)]
     elif os.path.isfile(path):
         file_paths = [path]
+        if path.endswith(".pdf"):
+            first_page = int(
+                input("Indicate the first page of the document to summarize: ")
+            )
+            last_page = int(
+                input("Indicate the last page of the document to summarize: ")
+            )
+
     else:
         raise ValueError(
             f"{path} is not a valid path for the documents \
@@ -65,7 +73,30 @@ to proceed"
         print(f"Segmenting file {file_path} into chunks")
         if file_path.endswith(".pdf"):
             loader_pdf = PyPDFLoader(file_path)
-            loaders.extend(loader_pdf.load())
+            # print(f"type(loader_pdf): {type(loader_pdf)}")
+            # print(f"type(loader_pdf.load()): {type(loader_pdf.load())}")
+            # print(f"type(loader_pdf.load()[0]): {type(loader_pdf.load()[0])}")
+            # print(f"loader_pdf.load()[0]: {loader_pdf.load()[0]}")
+            pdf_docs = loader_pdf.load()
+            content = ""
+            for doc in pdf_docs:
+                if doc.metadata["page"] >= int(first_page) - 1 and doc.metadata[
+                    "page"
+                ] < int(last_page):
+                    content += doc.page_content
+            # Process content
+            # Replace single '\n' with space
+            # content = re.sub('(?<!\n)\n(?!\n)', ' ', content)
+            # Replace any '\n' that is not after the end of
+            # a sentence (., !, ?) by a space
+            content = re.sub("(?<=[^.\n!?])\n", " ", content)
+            # Replace any sequence of '\n' with more than 2 '\n' by a single '\n'
+            content = re.sub("\n{2,}", "\n\n", content)
+            print(f"content: {content}")
+
+            aggregated_pdf_doc = Document(page_content=content)
+            # loaders.extend(loader_pdf.load())
+            loaders.extend([aggregated_pdf_doc])
             processed_files.append(file_path)
         elif file_path.endswith(".docx") or file_path.endswith(".doc"):
             loader_doc = Docx2txtLoader(file_path)
@@ -77,7 +108,7 @@ to proceed"
             processed_files.append(file_path)
 
     char_text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap  # , separator = "\n"
     )
     chunks = char_text_splitter.split_documents(loaders)
     return chunks, processed_files

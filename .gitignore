@@ -14,7 +14,7 @@ data/**
 models/**
 docs*/**
 db*/**
-.the_hob*
+**/*.pdf
 
 # Terraform #
 # Local .terraform directories
