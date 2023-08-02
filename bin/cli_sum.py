@@ -51,9 +51,7 @@ def select_llm() -> Union[GPT4All, LlamaCpp, OpenAI]:
 def select_document() -> List[Document]:
     """Allow a user to import the document to summarize"""
     document_path = input("Enter the path of the document to summarize\n")
-    documents, _ = chunk_documents(
-        path=document_path, chunk_size=1000, chunk_overlap=100
-    )
+    documents, _ = chunk_documents(path=document_path, chunk_size=1000, chunk_overlap=0)
     return documents
 
 
@@ -84,7 +82,7 @@ def main():
         llm=llm,
         document_path="",  # TODO
         documents=documents,
-        chain_type=ChainType.REFINE,
+        chain_type=ChainType.MAP_REDUCE,
     )
     summary = summary_session.summarize_documents()
     print(f"{blue}Summary: {summary}{green}")
