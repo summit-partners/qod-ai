@@ -92,7 +92,7 @@ to proceed"
             content = re.sub("(?<=[^.\n!?])\n", " ", content)
             # Replace any sequence of '\n' with more than 2 '\n' by a single '\n'
             content = re.sub("\n{2,}", "\n\n", content)
-            print(f"content: {content}")
+            # print(f"content: {content}")
 
             aggregated_pdf_doc = Document(page_content=content)
             # loaders.extend(loader_pdf.load())
