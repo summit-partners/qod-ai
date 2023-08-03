@@ -96,27 +96,46 @@ long documents (e.g., refine)"
         that can be inserted
         in a prompt for a synthesis chain.
         """
-        summaries_as_context = []
-        context = ""
-        for summary in summaries:
+        compression_ratio = 10  # TODO - Add that as a parameter
+        summaries_as_context = ""
+        segmented_summary = ""
+        segmented_summaries_as_context = []
+        for index, summary in enumerate(summaries):
             summary = summary.replace("\n", " ")
             new_context = f'CONTEXT: "{summary}"\n\n'
-            temporary_context = context + new_context
-            nb_token_with_additional_content = self.llm.get_num_tokens(
-                prompt.format(summaries=temporary_context)
-            )
-            print("\n\n############")
-            print(
-                f"nb_token_with_additional_content: {nb_token_with_additional_content}"
-            )
-            print("############\n\n")
-            # We add the context as a list of summaries
-            if nb_token_with_additional_content > self.llm.n_ctx:
-                summaries_as_context.append(context)
-                context = ""
-            context += new_context
-        summaries_as_context.append(context)
-        return summaries_as_context
+            summaries_as_context += new_context
+            segmented_summary += new_context
+            if index % compression_ratio == 0:
+                segmented_summaries_as_context.append(segmented_summary)
+                segmented_summary = ""
+        if len(segmented_summary) > 0:
+            segmented_summaries_as_context.append(segmented_summary)
+        # Validating if the entire summary context exceed the
+        #  LLM context size
+        nb_token_with_additional_content = self.llm.get_num_tokens(
+            prompt.format(summaries=summaries_as_context)
+        )
+        if nb_token_with_additional_content > self.llm.n_ctx:
+            return segmented_summaries_as_context
+        else:
+            return [summaries_as_context]
+
+        #     nb_token_with_additional_content = self.llm.get_num_tokens(
+        #         prompt.format(summaries=temporary_context)
+        #     )
+        #     print("\n\n############")
+        #     print(
+        #         f"nb_token_with_additional_content: {
+        # nb_token_with_additional_content}"
+        #     )
+        #     print("############\n\n")
+        #     # We add the context as a list of summaries
+        #     if nb_token_with_additional_content > self.llm.n_ctx:
+        #         summaries_as_context.append(context)
+        #         context = ""
+        #     context += new_context
+        # summaries_as_context.append(context)
+        # return summaries_as_context
 
     def _summarize_documents_reduce(self):
         """Summarize the document using a reduce chain.
