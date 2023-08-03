@@ -4,6 +4,7 @@ from typing import Union, Type, List
 from qod.base_data_types import BaseAttributeType
 import typer
 import secrets
+import time
 
 from langchain.llms import GPT4All, LlamaCpp, OpenAI
 from langchain.schema import Document
@@ -84,8 +85,29 @@ def main():
         documents=documents,
         chain_type=ChainType.MAP_REDUCE,
     )
-    summary = summary_session.summarize_documents()
-    print(f"{blue}Summary: {summary}{green}")
+    start_reduce = time.time()
+    summary_reduce = summary_session.summarize_documents()
+    end_reduce = time.time()
+    print(f"{blue}Summary: {summary_reduce}{green}")
+
+    summary_session = SummarySession(
+        ssid="ssid_" + secrets.token_hex(12),
+        llm=llm,
+        document_path="",  # TODO
+        documents=documents,
+        chain_type=ChainType.REFINE,
+    )
+    start_refine = time.time()
+    summary_refine = summary_session.summarize_documents()
+    end_refine = time.time()
+    print(f"{blue}Summary: {summary_reduce}{green}")
+
+    print("\n\n\n")
+    print(f"Summary reduce: {yellow}{summary_reduce}{green}")
+    print(f"Time: {red}{round(end_reduce - start_reduce, 2)}{green}")
+    print("\n\n")
+    print(f"Summary refine: {yellow}{summary_refine}{green}")
+    print(f"Time: {red}{round(end_refine - start_refine, 2)}{green}")
 
 
 if __name__ == "__main__":

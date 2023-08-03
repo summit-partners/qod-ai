@@ -86,7 +86,7 @@ long documents (e.g., refine)"
             )
             print("############\n\n")
             # We add the context as a list of summaries
-            if nb_token_with_additional_content > self.llm.n_ctx:
+            if nb_token_with_additional_content > self.llm.n_ctx * 0.66:
                 summaries_as_context.append(context)
                 context = ""
             context += new_context
