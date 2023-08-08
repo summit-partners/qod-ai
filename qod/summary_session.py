@@ -6,6 +6,12 @@ from langchain.prompts import PromptTemplate
 from langchain import LLMChain
 
 from qod.chain_data_types import ChainType
+from qod.langchain_wrappers import chunk_documents
+
+red = "\033[0;31m"
+yellow = "\033[0;33m"
+green = "\033[0;32m"
+blue = "\033[0;34m"
 
 
 class SummarySession:
@@ -14,7 +20,6 @@ class SummarySession:
     ssid: str
     llm: LlamaCpp
     document_path: str
-    documents: List[Document]
     chain_type: ChainType
 
     def __init__(
@@ -22,22 +27,52 @@ class SummarySession:
         ssid: str,
         llm,
         document_path: str,
-        documents: List[Document],
         chain_type: ChainType,
     ):
         """Constructor for a SummarySession
         :param ssid: Identifier for a summary session
         :param llm: Large language model used by the session
         :param document_path: Path of the document to summarize
-        documents: List of chunks of the document to
-        summarize #TODO - Fix that
         :param chain_type: Type of chain used to produce the summary
         """
         self.ssid = ssid
         self.llm = llm
         self.document_path = document_path
-        self.documents = documents
         self.chain_type = chain_type
+
+    def get_documents(self) -> List[Document]:
+        """Import the document to summarize and decompose it into
+        chunks based on the chain selected
+        """
+        # Import the document based on the chain expectations
+        # (one chunk for stuffed, multiple chunks for other chains)
+        documents: List[Document] = []
+        if self.chain_type == ChainType.STUFFED:
+            documents, _ = chunk_documents(
+                path=self.document_path, chunk_size=float("Inf"), chunk_overlap=0
+            )
+        elif self.chain_type == ChainType.MAP_REDUCE:
+            documents, _ = chunk_documents(
+                path=self.document_path, chunk_size=3000, chunk_overlap=500
+            )
+        elif self.chain_type == ChainType.REFINE:
+            documents, _ = chunk_documents(
+                path=self.document_path, chunk_size=1500, chunk_overlap=250
+            )
+        else:
+            print(
+                "The chain selected is not supported. Please select \
+another type of chain."
+            )
+        print("Chunks to summarize:")
+        colors = [red, yellow, blue, green]
+        for ind, doc in enumerate(documents):
+            color = colors[ind % len(colors)]
+            text = doc.page_content
+            print(f"{color} {text}")
+        print(f"{green}\n")
+
+        return documents
 
     def summarize_documents(self) -> str:
         """Use the LLM to compute and return a summary of the document
@@ -46,10 +81,13 @@ class SummarySession:
         # Call the summarize function associated with the chain type
         # of the session
         if self.chain_type == ChainType.STUFFED:
+            print(f"{red}Summarizing the document  using a stuffed chain{green}")
             return self._summarize_documents_stuffed()
         elif self.chain_type == ChainType.MAP_REDUCE:
+            print(f"{red}Summarizing the document  using a reduce chain{green}")
             return self._summarize_documents_reduce()
         elif self.chain_type == ChainType.REFINE:
+            print(f"{red}Summarizing the document  using a refine chain{green}")
             return self._summarize_documents_refine()
         print(
             "The chain selected is not supported. Please select \
@@ -61,6 +99,7 @@ another type of chain."
         """Summarize the document using a stuffed chain.
         :return A summary of the document #TODO - Add intermediary results
         """
+        documents: List[Document] = self.get_documents()
         # Setting up the chain
         prompt = PromptTemplate.from_template(
             'Summarize this content as a text: "{context}"\n\n' "Summary: "
@@ -69,7 +108,7 @@ another type of chain."
 
         # Getting the context as a single blurb
         context = ""
-        for document in self.documents:
+        for document in documents:
             context += document.page_content
 
         # The context is rejected if the prompt exceed the maximum context
@@ -82,6 +121,9 @@ supported by the LLM. You must select another chain type that supports \
 long documents (e.g., refine)"
             )
             return ""
+
+        print(f"{yellow}\n\n Prompt: {prompt.format(context=context)}{green}")
+        print(f"{yellow}Nb tokens: {nb_prompt_token}\n\n{green}")
         return chain.run(context=context)
 
     def _get_summaries_as_context(
@@ -96,7 +138,9 @@ long documents (e.g., refine)"
         that can be inserted
         in a prompt for a synthesis chain.
         """
-        compression_ratio = 10  # TODO - Add that as a parameter
+        compression_ratio = (
+            5  # int(len(summaries)/10)+1  # TODO - Add that as a parameter
+        )
         summaries_as_context = ""
         segmented_summary = ""
         segmented_summaries_as_context = []
@@ -105,17 +149,27 @@ long documents (e.g., refine)"
             new_context = f'CONTEXT: "{summary}"\n\n'
             summaries_as_context += new_context
             segmented_summary += new_context
-            if index % compression_ratio == 0:
+            if (index + 1) % compression_ratio == 0:
                 segmented_summaries_as_context.append(segmented_summary)
                 segmented_summary = ""
-        if len(segmented_summary) > 0:
+        if segmented_summary != "":
             segmented_summaries_as_context.append(segmented_summary)
         # Validating if the entire summary context exceed the
         #  LLM context size
         nb_token_with_additional_content = self.llm.get_num_tokens(
             prompt.format(summaries=summaries_as_context)
         )
-        if nb_token_with_additional_content > self.llm.n_ctx * 0.66:
+        max_token = self.llm.n_ctx * 0.75
+        print(
+            f"{yellow}\n\n Tentative prompt: \
+{prompt.format(summaries=summaries_as_context)}{green}"
+        )
+        print(
+            f"{yellow}Nb tokens: \
+{nb_token_with_additional_content}/{max_token}\n\n{green}"
+        )
+
+        if nb_token_with_additional_content > self.llm.n_ctx * 0.75:
             return segmented_summaries_as_context
         else:
             return [summaries_as_context]
@@ -142,7 +196,9 @@ long documents (e.g., refine)"
         :return A summary of the document #TODO - Add intermediary results"""
         # The max recursion level indicates the maximjm passes we want to
         #  do over the document or its summaries
-        max_pass = 3  # TODO - add as an argument to the method
+        max_pass = 5  # TODO - add as an argument to the method
+
+        documents: List[Document] = self.get_documents()
 
         # The reduce chain is used to extract a summary for each
         # chunk of the document to summarize
@@ -154,17 +210,33 @@ long documents (e.g., refine)"
         llm_reduce = LLMChain(prompt=reduce_prompt, llm=self.llm)
         # The synthesize chain is used to collapse summaries assembled
         # by the reduce chain or by another synthesize chain
+        # synthesize_prompt = PromptTemplate.from_template(
+        #     "Given the following pieces of content extracted
+        # from a long document, write a final summary for the long
+        # document:\n\n"
+        #     "{summaries} \n\n"
+        #     "FINAL SUMMARY:"
+        # )
         synthesize_prompt = PromptTemplate.from_template(
-            "Given the following pieces of content extracted from \
-a long document, write a final summary for the long document:\n\n"
+            "Write a summary that combines the following sequence \
+of pieces of contexts \
+extracted from the same document: :\n\n"
             "{summaries} \n\n"
-            "FINAL SUMMARY:"
+            "SUMMARY:"
         )
         llm_synthesize = LLMChain(prompt=synthesize_prompt, llm=self.llm)
 
+        final_prompt = PromptTemplate.from_template(
+            "Assemble a final summary that combines all the \
+information contained in the following pieces of contexts: \n\n"
+            "{summaries} \n\n"
+            "FINAL SUMMARY:"
+        )
+        llm_final = LLMChain(prompt=final_prompt, llm=self.llm)
+
         summaries = []
         summaries_as_context = []
-        chunks = [document.page_content for document in self.documents]
+        chunks = [document.page_content for document in documents]
         nb_pass = 0
         while chunks and nb_pass < max_pass:
             context = chunks.pop(0)
@@ -173,10 +245,11 @@ a long document, write a final summary for the long document:\n\n"
                 if nb_pass == 0
                 else synthesize_prompt.format(summaries=context)
             )
-            print(f"\n\nPrompt: {my_prompt}\n\n")
+            print(f"\n\n{yellow}Prompt: {my_prompt}\n\n{green}")
             summary = (
                 llm_reduce.run(context) if nb_pass == 0 else llm_synthesize.run(context)
             )
+            print(f"\n{red}Summary: {summary}\n{green}")
             summaries.append(summary)
             # If all chunks have been processed, we need to that
             #  the summaries do not exceed the LLM context size
@@ -188,7 +261,7 @@ a long document, write a final summary for the long document:\n\n"
                 # The summaries are too long for the LLM
                 # They must be collated and reprocessed
                 if len(summaries_as_context) > 1:
-                    print("ADDING A LEVEL OF RECURSION!!!")
+                    print("ADDING A LEVEL OF RECURSION!!! {nb_pass}")
                     nb_pass += 1
                     for sum_as_ctxt in summaries_as_context:
                         chunks.append(sum_as_ctxt)
@@ -200,13 +273,14 @@ a long document, write a final summary for the long document:\n\n"
 We recommend using a refine chain instead."
             )
             return ""
-        my_prompt = synthesize_prompt.format(summaries=summaries_as_context[0])
-        print(f"\n\nPrompt: {my_prompt}\n\n")
-        return llm_synthesize.run(summaries_as_context[0])
+        my_prompt = final_prompt.format(summaries=summaries_as_context[0])
+        print(f"{yellow}\n\nPrompt: {my_prompt}\n\n{green}")
+        return llm_final.run(summaries_as_context[0])
 
     def _summarize_documents_refine(self) -> str:
         """Summarize the document using a refine chain.
         :return A summary of the document #TODO - Add intermediary results"""
+        documents: List[Document] = self.get_documents()
         # Setting up the LLM chains
         refine_start_prompt = PromptTemplate.from_template(
             'Summarize this content: "{context}"\n\n' "Summary: "
@@ -228,7 +302,7 @@ context to the first summary.\n\n"
 
         # Sequentially summarize the documents
         summary = ""
-        for index, document in enumerate(self.documents):
+        for index, document in enumerate(documents):
             # We extract the context from the document
             context: str = document.page_content.replace("\n", " ")
 

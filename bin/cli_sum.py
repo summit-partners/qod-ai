@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 
-from typing import Union, Type, List
+from typing import Union, Type
 from qod.base_data_types import BaseAttributeType
 import typer
 import secrets
 import time
 
 from langchain.llms import GPT4All, LlamaCpp, OpenAI
-from langchain.schema import Document
 
 from qod.llm_data_types import LLMType, LLMAttributes
-from qod.langchain_wrappers import get_llm, chunk_documents
+from qod.langchain_wrappers import get_llm
 from qod.summary_session import SummarySession
 from qod.chain_data_types import ChainType
 
@@ -49,16 +48,9 @@ def select_llm() -> Union[GPT4All, LlamaCpp, OpenAI]:
     return get_llm(attr=llm_attributes)
 
 
-def select_document() -> List[Document]:
-    """Allow a user to import the document to summarize"""
-    document_path = input("Enter the path of the document to summarize\n")
-    documents, _ = chunk_documents(path=document_path, chunk_size=1000, chunk_overlap=0)
-    return documents
-
-
 def main():
     red = "\033[0;31m"
-    yellow = "\033[0;33m"
+    # yellow = "\033[0;33m"
     green = "\033[0;32m"
     blue = "\033[0;34m"
 
@@ -66,48 +58,19 @@ def main():
     llm = select_llm()
 
     # Get segmented document
-    documents = select_document()
-    print(f"Document segmented into {len(documents)} chunks")
-
-    # Printing the segmented text (TODO - Improve)
-    print("Segmented documents")
-    colors = [red, yellow, blue, green]
-    for ind, doc in enumerate(documents):
-        color = colors[ind % len(colors)]
-        text = doc.page_content
-        print(f"{color} {text}")
-    print(f"{green}\n")
+    document_path = input("Enter the path of the document to summarize\n")
 
     summary_session = SummarySession(
         ssid="ssid_" + secrets.token_hex(12),
         llm=llm,
-        document_path="",  # TODO
-        documents=documents,
-        chain_type=ChainType.MAP_REDUCE,
+        document_path=document_path,
+        chain_type=ChainType.STUFFED,
     )
-    start_reduce = time.time()
-    summary_reduce = summary_session.summarize_documents()
-    end_reduce = time.time()
-    print(f"{blue}Summary: {summary_reduce}{green}")
-
-    summary_session = SummarySession(
-        ssid="ssid_" + secrets.token_hex(12),
-        llm=llm,
-        document_path="",  # TODO
-        documents=documents,
-        chain_type=ChainType.REFINE,
-    )
-    start_refine = time.time()
-    summary_refine = summary_session.summarize_documents()
-    end_refine = time.time()
-    print(f"{blue}Summary: {summary_reduce}{green}")
-
-    print("\n\n\n")
-    print(f"Summary reduce: {yellow}{summary_reduce}{green}")
-    print(f"Time: {red}{round(end_reduce - start_reduce, 2)}{green}")
-    print("\n\n")
-    print(f"Summary refine: {yellow}{summary_refine}{green}")
-    print(f"Time: {red}{round(end_refine - start_refine, 2)}{green}")
+    start_stuffed = time.time()
+    summary_stuffed = summary_session.summarize_documents()
+    end_stuffed = time.time()
+    print(f"{blue}Summary: {summary_stuffed}{green}")
+    print(f"{red}Time: {round(end_stuffed - start_stuffed, 2)}{green}")
 
 
 if __name__ == "__main__":

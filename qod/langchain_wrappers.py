@@ -69,14 +69,11 @@ def chunk_documents(
             f"{path} is not a valid path for the documents \
 to proceed"
         )
+    print(f"List of files to segment: {file_paths}")
     for file_path in file_paths:
         print(f"Segmenting file {file_path} into chunks")
         if file_path.endswith(".pdf"):
             loader_pdf = PyPDFLoader(file_path)
-            # print(f"type(loader_pdf): {type(loader_pdf)}")
-            # print(f"type(loader_pdf.load()): {type(loader_pdf.load())}")
-            # print(f"type(loader_pdf.load()[0]): {type(loader_pdf.load()[0])}")
-            # print(f"loader_pdf.load()[0]: {loader_pdf.load()[0]}")
             pdf_docs = loader_pdf.load()
             content = ""
             for doc in pdf_docs:
@@ -92,10 +89,7 @@ to proceed"
             content = re.sub("(?<=[^.\n!?])\n", " ", content)
             # Replace any sequence of '\n' with more than 2 '\n' by a single '\n'
             content = re.sub("\n{2,}", "\n\n", content)
-            # print(f"content: {content}")
-
             aggregated_pdf_doc = Document(page_content=content)
-            # loaders.extend(loader_pdf.load())
             loaders.extend([aggregated_pdf_doc])
             processed_files.append(file_path)
         elif file_path.endswith(".docx") or file_path.endswith(".doc"):
@@ -111,6 +105,10 @@ to proceed"
         chunk_size=chunk_size, chunk_overlap=chunk_overlap  # , separator = "\n"
     )
     chunks = char_text_splitter.split_documents(loaders)
+    print(
+        f"The files to process have been decomposed \
+into {len(chunks)} chunks"
+    )
     return chunks, processed_files
 
 
