@@ -1,7 +1,6 @@
 import os
 import hashlib
 import shutil
-import sys
 import re
 from typing import Union, List, Optional, Tuple
 
@@ -31,64 +30,88 @@ from qod.llm_data_types import LLMAttributes, LLMFamily
 from qod.chain_data_types import ChainAttributes, ChainType
 
 
-__import__("pysqlite3")
-sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+# __import__("pysqlite3")
+# sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+
+reset = "\033[0m"
+red = "\033[0;31m"
+green = "\033[0;32m"
+yellow = "\033[0;33m"
+blue = "\033[0;34m"
+purple = "\033[0;35m"
+cyan = "\033[0;36m"
+white = "\033[0;37m"
+
+
+b_red = "\033[1;31m"
+b_green = "\033[1;32m"
+b_yellow = "\033[1;33m"
+b_blue = "\033[1;34m"
+b_purple = "\033[1;35m"
+b_cyan = "\033[1;36m"
+b_white = "\033[1;37m"
 
 
 def chunk_documents(
-    path, chunk_size=500, chunk_overlap=100
+    path,
+    chunk_size=500,
+    chunk_overlap=100,
+    first_page: Optional[int] = None,
+    last_page: Optional[int] = None,
 ) -> Tuple[List[Document], List[str]]:
     """Convert pdf, docx and txt document in a directory into text chunks
     :param path: Path of the document to process or a folder contaning
     the documents to process
     :param chunk_size: maximum amount of chracter in a chunk
     :param chunk_overlap: Amount of character overlaping between successive chunks
+    :param first_page: First page of the document to summarize
+    (for pdf only)
+    :param last_page: Last page of the document to summarize
+    (for pdf only)
     :return chunks: List of text chunks
     :return files: List of name of the files processed
     """
     processed_files = []
     file_paths = []
     loaders = []
-    first_page = 0
-    last_page = float("Inf")
     # Getting the name of the file to process
     if os.path.isdir(path):
         file_paths = [os.path.join(path, file_name) for file_name in os.listdir(path)]
     elif os.path.isfile(path):
         file_paths = [path]
-        if path.endswith(".pdf"):
-            first_page = int(
-                input("Indicate the first page of the document to summarize: ")
-            )
-            last_page = int(
-                input("Indicate the last page of the document to summarize: ")
-            )
 
     else:
         raise ValueError(
             f"{path} is not a valid path for the documents \
 to proceed"
         )
-    print(f"List of files to segment: {file_paths}")
+    print(f"{white}List of files to segment: {file_paths}{reset}")
     for file_path in file_paths:
-        print(f"Segmenting file {file_path} into chunks")
+        print(f"{white}Segmenting file {file_path} into chunks{reset}")
         if file_path.endswith(".pdf"):
             loader_pdf = PyPDFLoader(file_path)
             pdf_docs = loader_pdf.load()
             content = ""
             for doc in pdf_docs:
-                if doc.metadata["page"] >= int(first_page) - 1 and doc.metadata[
-                    "page"
-                ] < int(last_page):
-                    content += doc.page_content
+                if first_page is not None and doc.metadata["page"] < first_page - 1:
+                    continue
+                if last_page is not None and doc.metadata["page"] >= last_page:
+                    continue
+                content += doc.page_content
+
             # Process content
             # Replace single '\n' with space
             # content = re.sub('(?<!\n)\n(?!\n)', ' ', content)
+            # Replace any sequence of '\n' with more than 2 '\n' by a single '\n'
+            content = re.sub("\n{2,}", "\n\n", content)
             # Replace any '\n' that is not after the end of
             # a sentence (., !, ?) by a space
             content = re.sub("(?<=[^.\n!?])\n", " ", content)
-            # Replace any sequence of '\n' with more than 2 '\n' by a single '\n'
-            content = re.sub("\n{2,}", "\n\n", content)
+            # Replace any sequence of ' ' with more than 2 ' ' by a single ' '
+            content = re.sub(" {1,}", " ", content)
+            # Replace any sequence of '\n ' with more than 2 ' ' by a single '\n'
+            content = re.sub(r"\n\s*", "\n ", content)
+
             aggregated_pdf_doc = Document(page_content=content)
             loaders.extend([aggregated_pdf_doc])
             processed_files.append(file_path)
@@ -106,8 +129,8 @@ to proceed"
     )
     chunks = char_text_splitter.split_documents(loaders)
     print(
-        f"The files to process have been decomposed \
-into {len(chunks)} chunks"
+        f"{white}The documents  have been decomposed \
+into {len(chunks)} chunks{reset}"
     )
     return chunks, processed_files
 
@@ -154,6 +177,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
     :param attr: Attributes of the LLM object
     :return A LLM object
     """
+    print(f"{purple}")
     if attr.family == LLMFamily.GPT4ALL:
         return GPT4All(
             model=attr.model,
@@ -201,7 +225,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             temperature=0,
             client=None,
         )
-    raise Exception(f"Could not load the LLM for the family {attr.family}")
+    raise Exception(f"{red}Could not load the LLM for the family {attr.family}{reset}")
 
 
 def get_chain(
@@ -240,7 +264,10 @@ def get_vectorstore(
     :return db_directory: The path to the directory used to store the vectorstore
     """
     if documents_directory is not None:
-        print(f"Converting documents in {documents_directory:} into text chunks")
+        print(
+            f"{white}Converting documents in {documents_directory} \
+into text chunks{reset}"
+        )
         documents, files = chunk_documents(path=documents_directory)
         # Create a directory name from the vectorstore if none was provided
         if db_directory is None:
@@ -250,7 +277,8 @@ def get_vectorstore(
         # Erase the DB directory if it already exists
         if os.path.exists(db_directory) and os.path.isdir(db_directory):
             print(
-                f"Erasing the existing directory {db_directory} to store the embeddings"
+                f"{white}Erasing the existing directory {db_directory} \
+to store the embeddings{reset}"
             )
             shutil.rmtree(db_directory)
 

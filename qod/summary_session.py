@@ -1,17 +1,32 @@
-from typing import List
+import re
+from typing import List, Optional
 
 from langchain.llms import LlamaCpp
 from langchain.schema import Document
 from langchain.prompts import PromptTemplate
 from langchain import LLMChain
 
-from qod.chain_data_types import ChainType
+from qod.chain_data_types import SummaryChainType
 from qod.langchain_wrappers import chunk_documents
 
+
+reset = "\033[0m"
 red = "\033[0;31m"
-yellow = "\033[0;33m"
 green = "\033[0;32m"
+yellow = "\033[0;33m"
 blue = "\033[0;34m"
+purple = "\033[0;35m"
+cyan = "\033[0;36m"
+white = "\033[0;37m"
+
+
+b_red = "\033[1;31m"
+b_green = "\033[1;32m"
+b_yellow = "\033[1;33m"
+b_blue = "\033[1;34m"
+b_purple = "\033[1;35m"
+b_cyan = "\033[1;36m"
+b_white = "\033[1;37m"
 
 
 class SummarySession:
@@ -20,25 +35,109 @@ class SummarySession:
     ssid: str
     llm: LlamaCpp
     document_path: str
-    chain_type: ChainType
+    summary_chain_type: SummaryChainType
+    first_page: Optional[int]
+    last_page: Optional[int]
+    documents: List[Document] = []
 
     def __init__(
         self,
         ssid: str,
-        llm,
+        llm: LlamaCpp,
         document_path: str,
-        chain_type: ChainType,
+        summary_chain_type: SummaryChainType,
+        first_page: Optional[int],
+        last_page: Optional[int],
     ):
         """Constructor for a SummarySession
         :param ssid: Identifier for a summary session
         :param llm: Large language model used by the session
         :param document_path: Path of the document to summarize
-        :param chain_type: Type of chain used to produce the summary
+        :param sumary_chain_type: Type of chain used to produce the summary
+        :param first_page: First page of the document to summarize
+        (for pdf only)
+        :param last_page: Last page of the document to summarize
+        (for pdf only)
         """
         self.ssid = ssid
         self.llm = llm
         self.document_path = document_path
-        self.chain_type = chain_type
+        self.summary_chain_type = summary_chain_type
+        self.first_page = first_page
+        self.last_page = last_page
+
+    def get_documents(self) -> List[Document]:
+        """Import the document to summarize and decompose it into
+        chunks based on the chain selected
+        """
+
+        # Import the document based on the chain expectations
+        # (one chunk for stuffed, multiple chunks for other chains)
+        documents: List[Document] = []
+        if self.summary_chain_type == SummaryChainType.STUFFED:
+            documents, _ = chunk_documents(
+                path=self.document_path,
+                chunk_size=float("Inf"),
+                chunk_overlap=0,
+                first_page=self.first_page,
+                last_page=self.last_page,
+            )
+        elif self.summary_chain_type == SummaryChainType.MAP_REDUCE:
+            documents, _ = chunk_documents(
+                path=self.document_path,
+                chunk_size=3000,
+                chunk_overlap=500,
+                first_page=self.first_page,
+                last_page=self.last_page,
+            )
+        elif self.summary_chain_type == SummaryChainType.REFINE:
+            documents, _ = chunk_documents(
+                path=self.document_path,
+                chunk_size=1500,
+                chunk_overlap=250,
+                first_page=self.first_page,
+                last_page=self.last_page,
+            )
+        else:
+            print(
+                f"{red}The chain selected is not supported. Please select \
+another type of chain.{reset}"
+            )
+        self.documents = documents
+
+        return documents
+
+    def _find_overlap(self, str_a: str, str_b: str) -> str:
+        """ """
+        min_length = min(len(str_a), len(str_b))
+        for i in range(1, min_length + 1):
+            if str_a[-i:] == str_b[:i]:
+                return str_a[-i:]
+        return ""
+
+    def display_chunked_documents(self):
+        colors = [red, yellow, blue, purple, cyan]
+        overlap_color = white
+        nb_docs = len(self.documents)
+        chunked_text = ""
+        previous_overlap_length = 0
+        for ind, doc in enumerate(self.documents):
+            text = doc.page_content
+            overlap = ""
+            if ind < nb_docs - 1:
+                next_text = self.documents[ind + 1].page_content
+                overlap = self._find_overlap(text, next_text)
+
+            color = colors[ind % len(colors)]
+            chunked_text += (
+                f"{color} {text[previous_overlap_length:(len(text)-len(overlap))]}"
+            )
+            chunked_text += f"{overlap_color} {overlap}"
+            previous_overlap_length = len(overlap)
+            # Replacing \n by a single space
+        chunked_text = re.sub("\n{1,}", " ", chunked_text)
+        chunked_text = re.sub(" {1,}", " ", chunked_text)
+        print(f"{chunked_text}{reset}\n")
 
     def get_documents(self) -> List[Document]:
         """Import the document to summarize and decompose it into
@@ -80,18 +179,18 @@ another type of chain."
         """
         # Call the summarize function associated with the chain type
         # of the session
-        if self.chain_type == ChainType.STUFFED:
-            print(f"{red}Summarizing the document  using a stuffed chain{green}")
+        if self.summary_chain_type == SummaryChainType.STUFFED:
+            print(f"{white}Summarizing the document using a stuffed chain{reset}")
             return self._summarize_documents_stuffed()
-        elif self.chain_type == ChainType.MAP_REDUCE:
-            print(f"{red}Summarizing the document  using a reduce chain{green}")
+        elif self.summary_chain_type == SummaryChainType.MAP_REDUCE:
+            print(f"{white}Summarizing the document using a reduce chain{reset}")
             return self._summarize_documents_reduce()
-        elif self.chain_type == ChainType.REFINE:
-            print(f"{red}Summarizing the document  using a refine chain{green}")
+        elif self.summary_chain_type == SummaryChainType.REFINE:
+            print(f"{white}Summarizing the document using a refine chain{reset}")
             return self._summarize_documents_refine()
         print(
-            "The chain selected is not supported. Please select \
-another type of chain."
+            f"{red}The chain selected is not supported. Please select \
+another type of chain.{reset}"
         )
         return ""
 
@@ -116,14 +215,15 @@ another type of chain."
         nb_prompt_token = self.llm.get_num_tokens(prompt.format(context=context))
         if nb_prompt_token > self.llm.n_ctx:
             print(
-                "The document size exceeds the maximum number of tokens \
+                f"{red}The document size exceeds the maximum number of tokens \
 supported by the LLM. You must select another chain type that supports \
 long documents (e.g., refine)"
             )
             return ""
 
-        print(f"{yellow}\n\n Prompt: {prompt.format(context=context)}{green}")
-        print(f"{yellow}Nb tokens: {nb_prompt_token}\n\n{green}")
+        print(f"{yellow}\n\nPrompt: \n{prompt.format(context=context)}\n{reset}")
+        print(f"{yellow}Tokens: {nb_prompt_token}\n\n{reset}")
+        print(f"{purple}")
         return chain.run(context=context)
 
     def _get_summaries_as_context(
@@ -161,35 +261,18 @@ long documents (e.g., refine)"
         )
         max_token = self.llm.n_ctx * 0.75
         print(
-            f"{yellow}\n\n Tentative prompt: \
-{prompt.format(summaries=summaries_as_context)}{green}"
+            f"{yellow}\n\nIntermediary Prompt: \n \
+{prompt.format(summaries=summaries_as_context)}\n{reset}"
         )
         print(
-            f"{yellow}Nb tokens: \
-{nb_token_with_additional_content}/{max_token}\n\n{green}"
+            f"{yellow}Tokens: \
+{nb_token_with_additional_content}/{max_token}\n{reset}"
         )
 
         if nb_token_with_additional_content > self.llm.n_ctx * 0.75:
             return segmented_summaries_as_context
         else:
             return [summaries_as_context]
-
-        #     nb_token_with_additional_content = self.llm.get_num_tokens(
-        #         prompt.format(summaries=temporary_context)
-        #     )
-        #     print("\n\n############")
-        #     print(
-        #         f"nb_token_with_additional_content: {
-        # nb_token_with_additional_content}"
-        #     )
-        #     print("############\n\n")
-        #     # We add the context as a list of summaries
-        #     if nb_token_with_additional_content > self.llm.n_ctx:
-        #         summaries_as_context.append(context)
-        #         context = ""
-        #     context += new_context
-        # summaries_as_context.append(context)
-        # return summaries_as_context
 
     def _summarize_documents_reduce(self):
         """Summarize the document using a reduce chain.
@@ -245,23 +328,25 @@ information contained in the following pieces of contexts: \n\n"
                 if nb_pass == 0
                 else synthesize_prompt.format(summaries=context)
             )
-            print(f"\n\n{yellow}Prompt: {my_prompt}\n\n{green}")
+            print(f"\n\n{yellow}Intermediary prompt:\n{my_prompt}\n{reset}")
+            print(f"{purple}")
             summary = (
                 llm_reduce.run(context) if nb_pass == 0 else llm_synthesize.run(context)
             )
-            print(f"\n{red}Summary: {summary}\n{green}")
+            print("f{reset}")
+            print(f"\n{yellow}Intermediary summary: {summary}\n{reset}")
             summaries.append(summary)
             # If all chunks have been processed, we need to that
             #  the summaries do not exceed the LLM context size
             if not chunks:
-                print(f"### Pass {nb_pass}")
+                print(f"{white}Pass #{nb_pass}{reset}\n")
                 summaries_as_context = self._get_summaries_as_context(
                     summaries=summaries, prompt=synthesize_prompt
                 )
                 # The summaries are too long for the LLM
                 # They must be collated and reprocessed
                 if len(summaries_as_context) > 1:
-                    print("ADDING A LEVEL OF RECURSION!!! {nb_pass}")
+                    print("{white}Generating the content for an additional pass{reset}")
                     nb_pass += 1
                     for sum_as_ctxt in summaries_as_context:
                         chunks.append(sum_as_ctxt)
@@ -269,12 +354,13 @@ information contained in the following pieces of contexts: \n\n"
         # We exceed the maximum level of recursion
         if nb_pass >= max_pass:
             print(
-                "The reduce chain exceeded its maximum level of recursion. \
-We recommend using a refine chain instead."
+                f"{red}The reduce chain exceeded its maximum level of recursion. \
+We recommend using a refine chain instead.{reset}"
             )
             return ""
         my_prompt = final_prompt.format(summaries=summaries_as_context[0])
-        print(f"{yellow}\n\nPrompt: {my_prompt}\n\n{green}")
+        print(f"{yellow}\n\nFinal prompt:\n{my_prompt}\n{reset}")
+        print(f"{purple}")
         return llm_final.run(summaries_as_context[0])
 
     def _summarize_documents_refine(self) -> str:
@@ -316,14 +402,18 @@ context to the first summary.\n\n"
                 # TODO - THIS SHOULD BE A WHILE LOOP
                 if nb_prompt_token > self.llm.n_ctx:
                     print(
-                        f"WARNING  - The prompt exceed the maximum \
+                        f"{white}WARNING  - The prompt exceed the maximum \
 context size of the LLM ({nb_prompt_token}/{self.llm.n_ctx}), \
-the new context will be collapsed."
+the new context will be collapsed.{reset}"
                     )
+                    print(f"{purple}")
                     context = llm_collapse.run(context=context)
+                    print("reset")
                 my_prompt = refine_start_prompt.format(context=context)
-                print(f"\n\nStart Prompt: {my_prompt}\n\n")
+                print(f"{yellow}\n\nIntermediary prompt:\n{my_prompt}\n{reset}")
+                print(f"{purple}")
                 summary = llm_start.run(context)
+                print(f"{reset}")
                 continue
 
             # We apply the refine chain to sequentially enhance the summary
@@ -335,14 +425,18 @@ the new context will be collapsed."
             # TODO - THIS SHOULD BE A WHILE LOOP
             if nb_prompt_token > self.llm.n_ctx:
                 print(
-                    f"WARNING  - The prompt exceed the maximum \
+                    f"{white}WARNING  - The prompt exceed the maximum \
 context size of the LLM ({nb_prompt_token}/{self.llm.n_ctx}), \
-the new context will be collapsed."
+the new context will be collapsed.{reset}"
                 )
+                print(f"{purple}")
                 context = llm_collapse.run(context=context)
+                print(f"{reset}")
 
             my_prompt = refine_prompt.format(prev_summary=summary, context=context)
-            print(f"\n\nRefine Prompt: {my_prompt}\n\n")
+            print(f"{yellow}\n\nIntermediary prompt:\n{my_prompt}\n{reset}")
 
+            print(f"{purple}")
             summary = llm_refine.run({"prev_summary": summary, "context": context})
+            print(f"{reset}")
         return summary
