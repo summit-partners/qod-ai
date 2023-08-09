@@ -116,7 +116,7 @@ to proceed"
     )
     chunks = char_text_splitter.split_documents(loaders)
     display_cli_notification(
-        f"The documents  have been decomposed into {len(chunks)} chunks"
+        f"The documents have been decomposed into {len(chunks)} chunks"
     )
     return chunks, processed_files
 

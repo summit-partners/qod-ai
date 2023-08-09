@@ -189,7 +189,11 @@ long documents (e.g., refine)"
         return chain.run(context=context)
 
     def _get_summaries_as_context(
-        self, summaries: List[str], prompt: PromptTemplate
+        self,
+        summaries: List[str],
+        prompt: PromptTemplate,
+        pass_compression_factor: int,
+        display_temp: bool,
     ) -> List[str]:
         """Convert a list of summaries into a list of context to be used in a prompt.
         The size of the contexts in the produced list is determined according to the
@@ -200,9 +204,6 @@ long documents (e.g., refine)"
         that can be inserted
         in a prompt for a synthesis chain.
         """
-        compression_ratio = (
-            5  # int(len(summaries)/10)+1  # TODO - Add that as a parameter
-        )
         summaries_as_context = ""
         segmented_summary = ""
         segmented_summaries_as_context = []
@@ -211,7 +212,7 @@ long documents (e.g., refine)"
             new_context = f'CONTEXT: "{summary}"\n\n'
             summaries_as_context += new_context
             segmented_summary += new_context
-            if (index + 1) % compression_ratio == 0:
+            if (index + 1) % pass_compression_factor == 0:
                 segmented_summaries_as_context.append(segmented_summary)
                 segmented_summary = ""
         if segmented_summary != "":
@@ -222,24 +223,22 @@ long documents (e.g., refine)"
             prompt.format(summaries=summaries_as_context)
         )
         max_token = self.llm.n_ctx * 0.75
-        display_chain_temp(
-            f"Intermediary Prompt: \n \
-{prompt.format(summaries=summaries_as_context)}"
-        )
-        display_chain_temp(f"Tokens: {nb_token_with_additional_content}/{max_token}")
+        if display_temp:
+            my_prompt = prompt.format(summaries=summaries_as_context)
+            nb_tokens = self.llm.get_num_tokens(my_prompt)
+            display_chain_temp(f"Intermediary Prompt:\n{my_prompt}")
+            display_chain_temp(f"Tokens: {nb_tokens}/{max_token}")
 
         if nb_token_with_additional_content > self.llm.n_ctx * 0.75:
             return segmented_summaries_as_context
         else:
             return [summaries_as_context]
 
-    def _summarize_documents_reduce(self):
+    def _summarize_documents_reduce(
+        self, pass_compression_factor: int = 5, max_pass: int = 5, display_temp=False
+    ):
         """Summarize the document using a reduce chain.
         :return A summary of the document #TODO - Add intermediary results"""
-        # The max recursion level indicates the maximjm passes we want to
-        #  do over the document or its summaries
-        max_pass = 5  # TODO - add as an argument to the method
-
         documents: List[Document] = self.get_documents()
 
         # The reduce chain is used to extract a summary for each
@@ -250,56 +249,73 @@ long documents (e.g., refine)"
             "CONCISE SUMMARY: "
         )
         llm_reduce = LLMChain(prompt=reduce_prompt, llm=self.llm)
-        # The synthesize chain is used to collapse summaries assembled
-        # by the reduce chain or by another synthesize chain
-        # synthesize_prompt = PromptTemplate.from_template(
-        #     "Given the following pieces of content extracted
-        # from a long document, write a final summary for the long
-        # document:\n\n"
-        #     "{summaries} \n\n"
-        #     "FINAL SUMMARY:"
-        # )
-        synthesize_prompt = PromptTemplate.from_template(
+        # The colapse chain is used to collapse summaries assembled
+        # by the reduce chain or by another collapse chain
+        collapse_prompt = PromptTemplate.from_template(
             "Write a summary that combines the following sequence \
 of pieces of contexts \
 extracted from the same document: :\n\n"
             "{summaries} \n\n"
             "SUMMARY:"
         )
-        llm_synthesize = LLMChain(prompt=synthesize_prompt, llm=self.llm)
-
-        final_prompt = PromptTemplate.from_template(
+        llm_collapse = LLMChain(prompt=collapse_prompt, llm=self.llm)
+        # The synthesize chain is used to assemble a summary from all summaries
+        # calculated during the last pass
+        synthesize_prompt = PromptTemplate.from_template(
             "Assemble a final summary that combines all the \
 information contained in the following pieces of contexts: \n\n"
             "{summaries} \n\n"
             "FINAL SUMMARY:"
         )
-        llm_final = LLMChain(prompt=final_prompt, llm=self.llm)
+        llm_synthesize = LLMChain(prompt=synthesize_prompt, llm=self.llm)
 
         summaries = []
         summaries_as_context = []
         chunks = [document.page_content for document in documents]
-        nb_pass = 0
-        while chunks and nb_pass < max_pass:
+        pass_index = 0
+        nb_pass_chunks = len(chunks)
+        chunk_index = 0
+        while chunks and pass_index < max_pass:
             context = chunks.pop(0)
-            my_prompt = (
-                reduce_prompt.format(context=context)
-                if nb_pass == 0
-                else synthesize_prompt.format(summaries=context)
+            display_cli_notification(
+                f"Summarizing chunk {chunk_index+1}/{nb_pass_chunks} \
+from pass {pass_index+1}"
             )
-            display_chain_temp(f"Intermediary prompt:\n{my_prompt}")
+            # Display prompt
+            if display_temp:
+                my_prompt = (
+                    reduce_prompt.format(context=context)
+                    if pass_index == 0
+                    else collapse_prompt.format(summaries=context)
+                )
+                nb_tokens = self.llm.get_num_tokens(my_prompt)
+                display_chain_temp(f"Intermediary prompt:\n{my_prompt}")
+                display_chain_temp(f"# tokens: {nb_tokens}")
+
+            # Assemble summary for the chunk
             display_llm_notification(msg="", reset=False)
             summary = (
-                llm_reduce.run(context) if nb_pass == 0 else llm_synthesize.run(context)
+                llm_reduce.run(context)
+                if pass_index == 0
+                else llm_collapse.run(context)
             )
-            display_chain_temp(f"Intermediary summary: {summary}")
+            print()
+
+            # Display summary for the chunk
+            if display_temp:
+                display_chain_temp(f"Intermediary summary: {summary}")
+
             summaries.append(summary)
+            chunk_index += 1
+
             # If all chunks have been processed, we need to that
             #  the summaries do not exceed the LLM context size
             if not chunks:
-                display_cli_notification(f"Pass #{nb_pass}\n")
                 summaries_as_context = self._get_summaries_as_context(
-                    summaries=summaries, prompt=synthesize_prompt
+                    summaries=summaries,
+                    prompt=collapse_prompt,
+                    pass_compression_factor=pass_compression_factor,
+                    display_temp=display_temp,
                 )
                 # The summaries are too long for the LLM
                 # They must be collated and reprocessed
@@ -307,21 +323,31 @@ information contained in the following pieces of contexts: \n\n"
                     display_cli_notification(
                         "Generating the content for an additional pass"
                     )
-                    nb_pass += 1
+                    pass_index += 1
                     for sum_as_ctxt in summaries_as_context:
                         chunks.append(sum_as_ctxt)
                         summaries = []
+                    nb_pass_chunks = len(chunks)
         # We exceed the maximum level of recursion
-        if nb_pass >= max_pass:
+        if pass_index >= max_pass:
             display_error(
                 "The reduce chain exceeded its maximum level of recursion. \
 We recommend using a refine chain instead."
             )
             return ""
-        my_prompt = final_prompt.format(summaries=summaries_as_context[0])
-        display_chain_temp(f"Final prompt:\n{my_prompt}")
+        display_cli_notification(
+            "Synthesizing the summaries assembled in the last pass"
+        )
+
+        # Display final prompt
+        if display_temp:
+            my_prompt = synthesize_prompt.format(summaries=summaries_as_context[0])
+            nb_tokens = self.llm.get_num_tokens(my_prompt)
+            display_chain_temp(f"Final prompt:\n{my_prompt}")
+            display_chain_temp(f"# tokens: {nb_tokens}")
+
         display_llm_notification(msg="", reset=False)
-        return llm_final.run(summaries_as_context[0])
+        return llm_synthesize.run(summaries_as_context[0])
 
     def _summarize_documents_refine(self) -> str:
         """Summarize the document using a refine chain.
