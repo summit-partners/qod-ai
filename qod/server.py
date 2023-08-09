@@ -9,11 +9,13 @@ from functools import cache
 from typing import Optional, MutableMapping, List, Tuple
 
 from langchain.schema import Document
+from langchain.llms import LlamaCpp
 
 from qod.embeddings_data_types import EmbeddingsType
 from qod.llm_data_types import LLMType
-from qod.chain_data_types import ChainType
+from qod.chain_data_types import ChainType, SummaryChainType
 from qod.chat_session import ChatSession
+from qod.summary_session import SummarySession
 from qod.langchain_wrappers import get_llm, get_embeddings, get_chain, get_vectorstore
 
 
@@ -42,7 +44,7 @@ def root(_: Response, app_status: AppStatus = Depends(app_status)) -> AppStatus:
 
 @app.get("/setup", response_model=str)
 def setup_chat_session(
-    llm_type: LLMType = LLMType.VICUNA_13B,
+    llm_type: LLMType = LLMType.LLAMA2_13B,
     embeddings_type: EmbeddingsType = EmbeddingsType.SENTENCE_TRANSFORMER_HF,
     chain_type: ChainType = ChainType.STUFFED,
     documents_directory: str = "docs",
@@ -129,3 +131,42 @@ def flush_chat_history(response: Response, csid: str) -> None:
         response.headers["Content-Type"] = "text/plain"
 
     chat_sessions[csid].flush_history()
+
+
+@app.get("/summarize", response_model=Tuple[str, str])
+def summarize_document(
+    document_path: str,
+    llm_type: LLMType = LLMType.LLAMA2_13B,
+    summary_chain_type: SummaryChainType = SummaryChainType.STUFFED,
+    first_page: Optional[int] = None,
+    last_page: Optional[int] = None,
+) -> Tuple[str, str]:
+    """Create and setup a new chat session
+    :param document_path: Path of the document to summarize
+    :param llm_type: Type of LLM to use
+    :param summary_chain_type: Type of summary chain to use
+    :param first_page: First page of the document's content to summarize
+    :param last_page: Last page of the document's content to summarize
+    :return summary: Summary of the document
+    :return csid: The identifier of the summary session created
+    """
+    # Creating an identifier for the session
+    ssid: str = "ssid_" + secrets.token_hex(12)
+    llm = get_llm(attr=llm_type.get_attributes())
+    if not isinstance(llm, LlamaCpp):
+        raise Exception(
+            "Only Llama model are currently supported \
+for summarization. Please select another model."
+        )
+
+    # Create the summary session
+    summary_session = SummarySession(
+        ssid=ssid,
+        llm=llm,
+        document_path=document_path,
+        summary_chain_type=summary_chain_type,
+        first_page=first_page,
+        last_page=last_page,
+    )
+    summary: str = summary_session.summarize_documents()
+    return summary, ssid
