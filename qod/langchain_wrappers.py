@@ -28,28 +28,15 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from qod.embeddings_data_types import EmbeddingsAttributes, EmbeddingsFamily
 from qod.llm_data_types import LLMAttributes, LLMFamily
 from qod.chain_data_types import ChainAttributes, ChainType
+from qod.display_msg import (
+    display_error,
+    display_cli_notification,
+    display_llm_notification,
+)
 
 
 # __import__("pysqlite3")
 # sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-
-reset = "\033[0m"
-red = "\033[0;31m"
-green = "\033[0;32m"
-yellow = "\033[0;33m"
-blue = "\033[0;34m"
-purple = "\033[0;35m"
-cyan = "\033[0;36m"
-white = "\033[0;37m"
-
-
-b_red = "\033[1;31m"
-b_green = "\033[1;32m"
-b_yellow = "\033[1;33m"
-b_blue = "\033[1;34m"
-b_purple = "\033[1;35m"
-b_cyan = "\033[1;36m"
-b_white = "\033[1;37m"
 
 
 def chunk_documents(
@@ -85,9 +72,9 @@ def chunk_documents(
             f"{path} is not a valid path for the documents \
 to proceed"
         )
-    print(f"{white}List of files to segment: {file_paths}{reset}")
+    display_cli_notification(f"List of files to segment: {file_paths}")
     for file_path in file_paths:
-        print(f"{white}Segmenting file {file_path} into chunks{reset}")
+        display_cli_notification(f"Segmenting file {file_path} into chunks")
         if file_path.endswith(".pdf"):
             loader_pdf = PyPDFLoader(file_path)
             pdf_docs = loader_pdf.load()
@@ -128,9 +115,8 @@ to proceed"
         chunk_size=chunk_size, chunk_overlap=chunk_overlap  # , separator = "\n"
     )
     chunks = char_text_splitter.split_documents(loaders)
-    print(
-        f"{white}The documents  have been decomposed \
-into {len(chunks)} chunks{reset}"
+    display_cli_notification(
+        f"The documents  have been decomposed into {len(chunks)} chunks"
     )
     return chunks, processed_files
 
@@ -177,7 +163,7 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
     :param attr: Attributes of the LLM object
     :return A LLM object
     """
-    print(f"{purple}")
+    display_llm_notification(msg="", reset=False)
     if attr.family == LLMFamily.GPT4ALL:
         return GPT4All(
             model=attr.model,
@@ -225,7 +211,8 @@ def get_llm(attr: LLMAttributes) -> Union[GPT4All, LlamaCpp, OpenAI]:
             temperature=0,
             client=None,
         )
-    raise Exception(f"{red}Could not load the LLM for the family {attr.family}{reset}")
+    display_error(msg="", reset=False)
+    raise Exception(f"Could not load the LLM for the family {attr.family}")
 
 
 def get_chain(
@@ -264,9 +251,8 @@ def get_vectorstore(
     :return db_directory: The path to the directory used to store the vectorstore
     """
     if documents_directory is not None:
-        print(
-            f"{white}Converting documents in {documents_directory} \
-into text chunks{reset}"
+        display_cli_notification(
+            f"Converting documents in {documents_directory} into text chunks"
         )
         documents, files = chunk_documents(path=documents_directory)
         # Create a directory name from the vectorstore if none was provided
@@ -276,9 +262,8 @@ into text chunks{reset}"
             ).hexdigest()
         # Erase the DB directory if it already exists
         if os.path.exists(db_directory) and os.path.isdir(db_directory):
-            print(
-                f"{white}Erasing the existing directory {db_directory} \
-to store the embeddings{reset}"
+            display_cli_notification(
+                f"Erasing the existing directory {db_directory} to store the embeddings"
             )
             shutil.rmtree(db_directory)
 

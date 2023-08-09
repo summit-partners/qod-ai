@@ -13,25 +13,12 @@ from qod.llm_data_types import LLMType, LLMAttributes
 from qod.langchain_wrappers import get_llm
 from qod.summary_session import SummarySession
 from qod.chain_data_types import SummaryChainType
-
-
-reset = "\033[0m"
-red = "\033[0;31m"
-green = "\033[0;32m"
-yellow = "\033[0;33m"
-blue = "\033[0;34m"
-purple = "\033[0;35m"
-cyan = "\033[0;36m"
-white = "\033[0;37m"
-
-
-b_red = "\033[1;31m"
-b_green = "\033[1;32m"
-b_yellow = "\033[1;33m"
-b_blue = "\033[1;34m"
-b_purple = "\033[1;35m"
-b_cyan = "\033[1;36m"
-b_white = "\033[1;37m"
+from qod.display_msg import (
+    cli_input,
+    display_error,
+    display_cli_notification,
+    display_chain_final,
+)
 
 
 def get_selected_attribute_value(
@@ -44,16 +31,12 @@ def get_selected_attribute_value(
     attribute
     :return The value of an enum from the specified type
     """
-    print(
-        f"{b_cyan}Enter the number for the \
-{attribute_function} you wish to select?{reset}"
-    )
+    msg = f"Enter the number for the {attribute_function} you wish to select?\n"
     for enum_type in attribute_types:
-        print(
-            f"{cyan}    {enum_type.value}: \
-{enum_type.get_attributes().friendly_name}{reset}"
-        )
-    selected_value = input("")
+        value = enum_type.value
+        name = enum_type.get_attributes().friendly_name
+        msg += f"    {value}: {name}\n"
+    selected_value = cli_input(msg)
     return int(selected_value)
 
 
@@ -69,9 +52,7 @@ def select_llm() -> Union[GPT4All, LlamaCpp, OpenAI]:
         if llm_type_value in LLMType.__members__.values():
             valid_type = True
         else:
-            print(
-                f"{red}Invalid value - Please enter one of the provided choices.{reset}"
-            )
+            display_error("Invalid value - Please enter one of the provided choices.")
     llm_attributes: LLMAttributes = LLMType(llm_type_value).get_attributes()
     return get_llm(attr=llm_attributes)
 
@@ -87,54 +68,48 @@ def select_summary_chain_type() -> SummaryChainType:
         if summary_chain_type_value in SummaryChainType.__members__.values():
             return SummaryChainType(summary_chain_type_value)
         else:
-            print(
-                f"{red}Invalid value - Please enter one of the provided choice.{reset}"
-            )
+            display_error("Invalid value - Please enter one of the provided choice.")
 
 
 def select_document() -> Tuple[str, Optional[int], Optional[int]]:
+    """Allow a user to select a document to summarize"""
     first_page: Optional[int] = None
     last_page: Optional[int] = None
-    document_path = input(
-        f"{b_cyan}Enter the path of the document to summarize\n{reset}"
-    )
+    document_path = cli_input("Enter the path of the document to summarize\n")
     if document_path.endswith(".pdf"):
         first_page = int(
-            input(
-                f"{b_cyan}Indicate the first page of the \
-document to summarize: \n{reset}"
-            )
+            cli_input("Indicate the first page of the document to summarize: \n")
         )
         last_page = int(
-            input(
-                f"{b_cyan}Indicate the last page of the \
-document to summarize: \n{reset}"
-            )
+            cli_input("Indicate the last page of the document to summarize: \n")
         )
     return document_path, first_page, last_page
 
 
 def display_commands():
-    print(
-        f"{white}---------------------------------------------------------------------"
+    """Display the list of commands that can be used in the CLI"""
+    display_cli_notification(
+        "---------------------------------------------------------------------"
     )
-    print('Enter "exit" to stop')
-    print('Enter "summarize" to summarize your document')
-    print('Enter "llm" to select another language model')
-    print('Enter "chain" to select another chain')
-    print('Enter "document" to select a new document to summarize')
-    print(
+    display_cli_notification('Enter "exit" to stop')
+    display_cli_notification('Enter "summarize" to summarize your document')
+    display_cli_notification('Enter "llm" to select another language model')
+    display_cli_notification('Enter "chain" to select another chain')
+    display_cli_notification('Enter "document" to select a new document to summarize')
+    display_cli_notification(
         'Enter "chunks" to see the most recent document \
 summarized decomposed into chunks'
     )
-
-    print('Enter "help" to display this list of commands')
-    print("---------------------------------------------------------------------\n")
-    print(f"{reset}")
+    display_cli_notification('Enter "help" to display this list of commands')
+    display_cli_notification(
+        "---------------------------------------------------------------------\n"
+    )
 
 
 def summarize(summary_session: Optional[SummarySession] = None) -> SummarySession:
-    """ """
+    """Assemble a summary for a document
+    :return summary_session: A summary session
+    """
     ssid: str = "ssid_" + secrets.token_hex(12)
 
     # The user must select and LLM, a docuemnt and a chain
@@ -143,9 +118,10 @@ def summarize(summary_session: Optional[SummarySession] = None) -> SummarySessio
         # Choose the LLM to use for Q&A
         llm = select_llm()
         if not isinstance(llm, LlamaCpp):
+            display_error(msg="", reset=False)
             raise Exception(
-                f"{red} Only Llama model are currently supported \
-for summarization. Please select another model.{reset}"
+                "Only Llama model are currently supported \
+for summarization. Please select another model."
             )
         # Get segmented document
         document_path, first_page, last_page = select_document()
@@ -166,31 +142,39 @@ for summarization. Please select another model.{reset}"
     start_time = time.time()
     summary = summary_session.summarize_documents()
     end_time = time.time()
-    print(f"{blue}\n\nFinal summary: {summary}{reset}")
-    print(f"{red}Time: {round(end_time - start_time, 2)}{reset}")
+    display_chain_final(f"\n\nFinal summary: {summary}")
+    display_chain_final(f"Time: {round(end_time - start_time, 2)} sec")
     return summary_session
 
 
 def change_llm(summary_session: SummarySession) -> SummarySession:
-    """ """
+    """Enable the user to change the LLM used to assemble the summary
+    :parameter summary_session: The most recent summary sessions
+    :return The summary session updated with a new LLM
+    """
     llm = select_llm()
     if not isinstance(llm, LlamaCpp):
+        display_error(msg="", reset=False)
         raise Exception(
-            f"{red} Only Llama model are currently supported \
-for summarization. Please select another model.{reset}"
+            "Only Llama model are currently supported \
+for summarization. Please select another model."
         )
     summary_session.llm = llm
     return summary_session
 
 
 def change_chain(summary_session: SummarySession) -> SummarySession:
-    """ """
+    """Enable the user to change the chain used to assemble the summary
+    :parameter summary_session: The most recent summary sessions
+    :return The summary session updated with a new chain"""
     summary_session.summary_chain_type = select_summary_chain_type()
     return summary_session
 
 
 def change_document(summary_session: SummarySession) -> SummarySession:
-    """ """
+    """Enable the user to change the document to summarize
+    :parameter summary_session: The most recent summary sessions
+    :return The summary session updated with a new document"""
     path, first_page, last_page = select_document()
     summary_session.document_path = path
     summary_session.first_page = first_page
@@ -199,14 +183,15 @@ def change_document(summary_session: SummarySession) -> SummarySession:
 
 
 def main():
+    """Runs a CLI enabling a user to summarize documents using a LLM"""
     summary_session: SummarySession = summarize()
     display_commands()
     while True:
-        command: str = input(f"{b_cyan}Enter your command: {reset}")
+        command: str = cli_input("Enter your command: \n")
 
         # Exiting the system
         if command == "exit":
-            print(f"{red}Exiting{reset}")
+            display_cli_notification("Exiting")
             sys.exit()
 
         # Summarize a document
@@ -218,7 +203,7 @@ def main():
         if command == "llm":
             summary_session = change_llm(summary_session)
             llm_name = summary_session.llm.get_attributes().friendly_name
-            print(f"{white}The llm {llm_name} has been selected\n{reset}")
+            display_cli_notification(f"The llm {llm_name} has been selected\n")
             continue
 
         # Select a new chain
@@ -227,16 +212,16 @@ def main():
             chain_name = (
                 summary_session.summary_chain_type.get_attributes().friendly_name
             )
-            print(f"{white}The chain {chain_name} has been selected\n{reset}")
+            display_cli_notification(f"The chain {chain_name} has been selected\n")
             continue
 
         # Select a new document
         if command == "document":
             summary_session = change_document(summary_session)
-            print(
-                f'{white}The document "{summary_session.document_path}" \
+            display_cli_notification(
+                f'The document "{summary_session.document_path}" \
 (pages {summary_session.first_page} to {summary_session.last_page}) \
-has been selected\n{reset}'
+has been selected\n'
             )
             continue
 
@@ -250,9 +235,9 @@ has been selected\n{reset}'
             display_commands()
             continue
 
-        print(
-            f"{red}This command is not recognized. \
-Please use a command from the folowing list: {reset}"
+        display_error(
+            "This command is not recognized. \
+Please use a command from the folowing list:"
         )
         display_commands()
 

@@ -74,7 +74,7 @@ CHAIN_ATTRIBUTES = {
 # Mapping from a chain type to its attributes
 SUMMARY_CHAIN_ATTRIBUTES = {
     SummaryChainType.STUFFED: ChainAttributes(
-        type=ChainType.STUFFED, model="stuffed", friendly_name="None"
+        type=ChainType.STUFFED, model="stuffed", friendly_name="Stuffed"
     ),
     SummaryChainType.MAP_REDUCE: ChainAttributes(
         type=ChainType.MAP_REDUCE, model="map_reduce", friendly_name="Map reduce"
