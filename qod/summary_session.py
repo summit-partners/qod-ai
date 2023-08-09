@@ -139,40 +139,6 @@ another type of chain.{reset}"
         chunked_text = re.sub(" {1,}", " ", chunked_text)
         print(f"{chunked_text}{reset}\n")
 
-    def get_documents(self) -> List[Document]:
-        """Import the document to summarize and decompose it into
-        chunks based on the chain selected
-        """
-        # Import the document based on the chain expectations
-        # (one chunk for stuffed, multiple chunks for other chains)
-        documents: List[Document] = []
-        if self.chain_type == ChainType.STUFFED:
-            documents, _ = chunk_documents(
-                path=self.document_path, chunk_size=float("Inf"), chunk_overlap=0
-            )
-        elif self.chain_type == ChainType.MAP_REDUCE:
-            documents, _ = chunk_documents(
-                path=self.document_path, chunk_size=3000, chunk_overlap=500
-            )
-        elif self.chain_type == ChainType.REFINE:
-            documents, _ = chunk_documents(
-                path=self.document_path, chunk_size=1500, chunk_overlap=250
-            )
-        else:
-            print(
-                "The chain selected is not supported. Please select \
-another type of chain."
-            )
-        print("Chunks to summarize:")
-        colors = [red, yellow, blue, green]
-        for ind, doc in enumerate(documents):
-            color = colors[ind % len(colors)]
-            text = doc.page_content
-            print(f"{color} {text}")
-        print(f"{green}\n")
-
-        return documents
-
     def summarize_documents(self) -> str:
         """Use the LLM to compute and return a summary of the document
         :return A summary of the document #TODO - Add intermediary results
