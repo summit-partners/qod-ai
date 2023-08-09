@@ -16,6 +16,7 @@ from langchain.schema import Document
 from qod.embeddings_data_types import EmbeddingsType
 from qod.llm_data_types import LLMType
 from qod.chain_data_types import ChainType
+from qod.display_msg import display_llm_notification
 
 
 class ChatSession:
@@ -82,6 +83,7 @@ class ChatSession:
         :return answer: Answer to the question
         :return sources: List of source documents used to assemble the answer
         """
+        display_llm_notification(msg="", reset=False)
         result = self.chain({"question": question, "chat_history": self.history})
         answer = result.get("answer", "")
         sources = result.get("source_documents", [])

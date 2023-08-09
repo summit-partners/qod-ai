@@ -2,6 +2,7 @@ import os
 import hashlib
 import shutil
 import re
+import sys
 from typing import Union, List, Optional, Tuple
 
 from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
@@ -34,15 +35,14 @@ from qod.display_msg import (
     display_llm_notification,
 )
 
-
-# __import__("pysqlite3")
-# sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+__import__("pysqlite3")
+sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 
 def chunk_documents(
     path,
-    chunk_size=500,
-    chunk_overlap=100,
+    chunk_size=1500,
+    chunk_overlap=500,
     first_page: Optional[int] = None,
     last_page: Optional[int] = None,
 ) -> Tuple[List[Document], List[str]]:
@@ -99,7 +99,9 @@ to proceed"
             # Replace any sequence of '\n ' with more than 2 ' ' by a single '\n'
             content = re.sub(r"\n\s*", "\n ", content)
 
-            aggregated_pdf_doc = Document(page_content=content)
+            aggregated_pdf_doc = Document(
+                page_content=content, metadata={"source": file_path}
+            )
             loaders.extend([aggregated_pdf_doc])
             processed_files.append(file_path)
         elif file_path.endswith(".docx") or file_path.endswith(".doc"):
@@ -267,7 +269,10 @@ def get_vectorstore(
             )
             shutil.rmtree(db_directory)
 
-        print("Creating embeddings for the documents and storing then in a vectorstore")
+        display_cli_notification(
+            "Creating embeddings for the documents and \
+storing then in a vectorstore"
+        )
         vectorstore = Chroma.from_documents(
             documents,
             embedding=embeddings,
@@ -280,7 +285,7 @@ def get_vectorstore(
 load pre-calculated embeddings or a documents directory to calculate and \
 store new embeddings"
             )
-        print(
+        display_cli_notification(
             "Loading an existing vectorstore (CAUTION: the embedding function must \
 be the same than the one used when creating the vectorstore)"
         )
