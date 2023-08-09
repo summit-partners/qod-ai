@@ -24,6 +24,13 @@ from qod.llm_data_types import LLMType, LLMAttributes
 from qod.chain_data_types import ChainType, ChainAttributes
 from qod.langchain_wrappers import get_llm, get_embeddings, get_chain, get_vectorstore
 from qod.chat_session import ChatSession
+from qod.display_msg import (
+    cli_input,
+    display_error,
+    display_cli_notification,
+    display_chain_final,
+    display_chain_temp,
+)
 
 
 def get_selected_attribute_value(
@@ -36,10 +43,12 @@ def get_selected_attribute_value(
     attribute
     :return The value of an enum from the specified type
     """
-    print(f"Enter the number for the {attribute_function} you wish to select?")
+    msg = f"Enter the number for the {attribute_function} you wish to select?\n"
     for enum_type in attribute_types:
-        print(f"    {enum_type.value}: {enum_type.get_attributes().friendly_name}")
-    selected_value = input("")
+        value = enum_type.value
+        name = enum_type.get_attributes().friendly_name
+        msg += f"    {value}: {name}\n"
+    selected_value = cli_input(msg)
     return int(selected_value)
 
 
@@ -55,7 +64,7 @@ def select_llm() -> Union[GPT4All, LlamaCpp, OpenAI]:
         if llm_type_value in LLMType.__members__.values():
             valid_type = True
         else:
-            print("Invalid value - Please enter one of the provided choices.")
+            display_error("Invalid value - Please enter one of the provided choices.")
     llm_attributes: LLMAttributes = LLMType(llm_type_value).get_attributes()
     return get_llm(attr=llm_attributes)
 
@@ -74,7 +83,7 @@ def select_embeddings() -> (
         if llm_type_value in EmbeddingsType.__members__.values():
             valid_type = True
         else:
-            print("Invalid value - Please enter one of the provided choices.")
+            display_error("Invalid value - Please enter one of the provided choices.")
     embeddings_attributes: EmbeddingsAttributes = EmbeddingsType(
         llm_type_value
     ).get_attributes()
@@ -95,7 +104,7 @@ def select_chain(
         if chain_type_value in ChainType.__members__.values():
             valid_type = True
         else:
-            print("Invalid value - Please enter one of the provided choice.")
+            display_error("Invalid value - Please enter one of the provided choice.")
     chain_attributes: ChainAttributes = ChainType(chain_type_value).get_attributes()
     return get_chain(chain_attributes, llm, vectorstore)
 
@@ -112,33 +121,30 @@ def load_create_vectorstore(
     documents_directory: Optional[str] = None
     valid_type = False
     while not valid_type:
-        print(
+        choice = cli_input(
             "Enter 'load' if you want to load an existing vector store or 'new' to \
-create a new one"
+create a new one\n"
         )
-        choice = input("")
         if choice in ["load", "new"]:
             valid_type = True
         else:
-            print("Invalid value - Please enter one of the provided choices.")
+            display_error("Invalid value - Please enter one of the provided choices.")
             continue
         if choice == "load":
-            print("Enter the path of the vectorstore directory")
-            db_directory = input("")
+            db_directory = cli_input("Enter the path of the vectorstore directory\n")
         if choice == "new":
-            print("Enter the path of the documents directory")
-            documents_directory = input("")
-            print(
-                "Do you wish to name the directory in which the vectorstore will \
-be stored? (y: yes, anything else: no)"
+            documents_directory = cli_input(
+                "Enter the path of the documents directory\n"
             )
-            naming_choice = input("")
+            naming_choice = cli_input(
+                "Do you wish to name the directory in which the vectorstore will \
+be stored? (y: yes, anything else: no)\n"
+            )
             if naming_choice == "y":
-                print(
+                db_directory = cli_input(
                     "Enter the name of the directory where the vectorstore will \
-be stored"
+be stored\n"
                 )
-                db_directory = input("")
     return get_vectorstore(
         embeddings=embeddings,
         db_directory=db_directory,
@@ -155,7 +161,7 @@ def main():
 
     # Create or load an indexed DB
     vectorstore, db_directory = load_create_vectorstore(embeddings=embedding)
-    print(f"Embeddings stored at: {db_directory}")
+    display_cli_notification(f"Embeddings stored at: {db_directory}")
 
     # Select the chain type
     qa = select_chain(llm, vectorstore)
@@ -173,35 +179,37 @@ def main():
         embeddings_type=1,  # TODO
         chain_type=1,  # TODO
     )
-    red = "\033[0;31m"
-    yellow = "\033[0;33m"
-    green = "\033[0;32m"
-    blue = "\033[0;34m"
 
     chat_history = []
-    print(
-        f"{yellow}---------------------------------------------------------------------"
+    display_cli_notification(
+        "---------------------------------------------------------------------"
     )
-    print(
+    display_cli_notification(
         "The system is now ready to interact with your document. Please ask your \
 questions."
     )
-    print('Enter "exit" to stop')
-    print('Enter "flush" to flush the history')
-    print('Enter "llm" to change the language model used to ask questions')
-    print('Enter "chain" to change the chain type used to ask questions')
-    print("---------------------------------------------------------------------")
+    display_cli_notification('Enter "exit" to stop')
+    display_cli_notification('Enter "flush" to flush the history')
+    display_cli_notification(
+        'Enter "llm" to change the language model used to ask questions'
+    )
+    display_cli_notification(
+        'Enter "chain" to change the chain type used to ask questions'
+    )
+    display_cli_notification(
+        "---------------------------------------------------------------------"
+    )
 
     while True:
-        query = input(f"{green}Prompt: ")
+        query = cli_input("Question: ")
 
         if query == "exit" or query == "quit" or query == "q" or query == "f":
-            print("Exiting")
+            display_cli_notification("Exiting")
             sys.exit()
         if query == "":
             continue
         if query == "flush":
-            print("Erasing the history")
+            display_cli_notification("Erasing the history")
             chat_history = []
             continue
         if query == "llm":
@@ -214,12 +222,11 @@ questions."
         answer_start = time.time()
         result = chat_session.chain({"question": query, "chat_history": chat_history})
         answer_end = time.time()
-        print()
-        print(f"{blue}Answer: " + result["answer"])
-        print(f"{red}Time: {round(answer_end - answer_start, 2)} sec")
-        print(f"{yellow}sources: ")
+        display_chain_final(f"Answer: {result['answer']}")
+        display_chain_final(f"Time: {round(answer_end - answer_start, 2)} sec")
+        display_chain_temp("sources: ")
         for s in result.get("source_documents", []):
-            print(f"{yellow}    {s}")
+            display_chain_temp(f"    {s}")
         chat_history.append((query, result["answer"]))
 
 

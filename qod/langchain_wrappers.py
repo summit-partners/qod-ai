@@ -2,6 +2,7 @@ import os
 import hashlib
 import shutil
 import re
+import sys
 from typing import Union, List, Optional, Tuple
 
 from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
@@ -35,8 +36,8 @@ from qod.display_msg import (
 )
 
 
-# __import__("pysqlite3")
-# sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+__import__("pysqlite3")
+sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 
 def chunk_documents(
