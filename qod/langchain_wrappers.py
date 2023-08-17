@@ -3,6 +3,7 @@ import hashlib
 import shutil
 import re
 import sys
+import time
 from typing import Union, List, Optional, Tuple
 
 from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
@@ -25,6 +26,7 @@ from langchain.chains.conversational_retrieval.prompts import CONDENSE_QUESTION_
 from langchain import LLMChain
 from langchain.chains.question_answering import load_qa_chain
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders.base import BaseLoader
 
 from qod.embeddings_data_types import EmbeddingsAttributes, EmbeddingsFamily
 from qod.llm_data_types import LLMAttributes, LLMFamily
@@ -37,6 +39,34 @@ from qod.display_msg import (
 
 __import__("pysqlite3")
 sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+
+
+def process_loader(
+    loader, first_page: Optional[int] = None, last_page: Optional[int] = None
+) -> str:
+    """ """
+    content = ""
+    for doc in loader:
+        if first_page is not None and doc.metadata.get("page", -1) < first_page - 1:
+            continue
+        if last_page is not None and doc.metadata.get("page", 10**18) >= last_page:
+            continue
+        content += doc.page_content
+
+    # Process content
+    # Replace single '\n' with space
+    # content = re.sub('(?<!\n)\n(?!\n)', ' ', content)
+    # Replace any sequence of '\n' with more than 2 '\n' by a single '\n'
+    content = re.sub("\n{2,}", "\n\n", content)
+    # Replace any '\n' that is not after the end of
+    # a sentence (., !, ?) by a space
+    content = re.sub("(?<=[^.\n!?])\n", " ", content)
+    # Replace any sequence of ' ' with more than 2 ' ' by a single ' '
+    content = re.sub(" {1,}", " ", content)
+    # Replace any sequence of '\n ' with more than 2 ' ' by a single '\n'
+    content = re.sub(r"\n\s*", "\n ", content)
+
+    return content
 
 
 def chunk_documents(
@@ -75,48 +105,35 @@ to proceed"
     display_cli_notification(f"List of files to segment: {file_paths}")
     for file_path in file_paths:
         display_cli_notification(f"Segmenting file {file_path} into chunks")
+        loader: Optional[BaseLoader] = None
         if file_path.endswith(".pdf"):
-            loader_pdf = PyPDFLoader(file_path)
-            pdf_docs = loader_pdf.load()
-            content = ""
-            for doc in pdf_docs:
-                if first_page is not None and doc.metadata["page"] < first_page - 1:
-                    continue
-                if last_page is not None and doc.metadata["page"] >= last_page:
-                    continue
-                content += doc.page_content
-
-            # Process content
-            # Replace single '\n' with space
-            # content = re.sub('(?<!\n)\n(?!\n)', ' ', content)
-            # Replace any sequence of '\n' with more than 2 '\n' by a single '\n'
-            content = re.sub("\n{2,}", "\n\n", content)
-            # Replace any '\n' that is not after the end of
-            # a sentence (., !, ?) by a space
-            content = re.sub("(?<=[^.\n!?])\n", " ", content)
-            # Replace any sequence of ' ' with more than 2 ' ' by a single ' '
-            content = re.sub(" {1,}", " ", content)
-            # Replace any sequence of '\n ' with more than 2 ' ' by a single '\n'
-            content = re.sub(r"\n\s*", "\n ", content)
-
-            aggregated_pdf_doc = Document(
-                page_content=content, metadata={"source": file_path}
-            )
-            loaders.extend([aggregated_pdf_doc])
-            processed_files.append(file_path)
+            loader = PyPDFLoader(file_path)
         elif file_path.endswith(".docx") or file_path.endswith(".doc"):
-            loader_doc = Docx2txtLoader(file_path)
-            loaders.extend(loader_doc.load())
-            processed_files.append(file_path)
+            loader = Docx2txtLoader(file_path)
         elif file_path.endswith(".txt"):
-            loader_txt = TextLoader(file_path)
-            loaders.extend(loader_txt.load())
-            processed_files.append(file_path)
+            loader = TextLoader(file_path)
+
+        if loader is None:
+            continue
+
+        content = process_loader(loader.load(), first_page, last_page)
+
+        aggregated_pdf_doc = Document(
+            page_content=content, metadata={"source": file_path}
+        )
+        loaders.extend([aggregated_pdf_doc])
+        processed_files.append(file_path)
 
     char_text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap  # , separator = "\n"
     )
     chunks = char_text_splitter.split_documents(loaders)
+
+    # Add chunk ID per document
+    for index, _ in enumerate(chunks):
+        # print(index, chunks[index].metadata)
+        chunks[index].metadata["chunk_id"] = index + 1
+
     display_cli_notification(
         f"The documents have been decomposed into {len(chunks)} chunks"
     )
@@ -236,7 +253,9 @@ def get_chain(
     return ConversationalRetrievalChain(
         retriever=vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 5}),
         question_generator=LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT),
-        combine_docs_chain=load_qa_chain(llm, chain_type=attr.model),
+        combine_docs_chain=load_qa_chain(
+            llm, chain_type=attr.model
+        ),  # , token_max=2000),
     )
 
 
@@ -269,6 +288,7 @@ def get_vectorstore(
             )
             shutil.rmtree(db_directory)
 
+        time_start = time.time()
         display_cli_notification(
             "Creating embeddings for the documents and \
 storing then in a vectorstore"
@@ -277,6 +297,9 @@ storing then in a vectorstore"
             documents,
             embedding=embeddings,
             persist_directory=db_directory,
+        )
+        display_cli_notification(
+            f"Time to create vectorstore: {round(time.time()-time_start, 1)} sec"
         )
     else:
         if db_directory is None:

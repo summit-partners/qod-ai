@@ -240,6 +240,7 @@ long documents (e.g., refine)"
         """Summarize the document using a reduce chain.
         :return A summary of the document #TODO - Add intermediary results"""
         documents: List[Document] = self.get_documents()
+        self.display_chunked_documents()
 
         # The reduce chain is used to extract a summary for each
         # chunk of the document to summarize
@@ -353,6 +354,8 @@ We recommend using a refine chain instead."
         """Summarize the document using a refine chain.
         :return A summary of the document #TODO - Add intermediary results"""
         documents: List[Document] = self.get_documents()
+        self.display_chunked_documents()
+
         # Setting up the LLM chains
         refine_start_prompt = PromptTemplate.from_template(
             'Summarize this content: "{context}"\n\n' "Summary: "

@@ -164,6 +164,25 @@ def main():
     vectorstore, db_directory = load_create_vectorstore(embeddings=embedding)
     display_cli_notification(f"Embeddings stored at: {db_directory}")
 
+    test_query = [
+        "Who is Marc Joliveau?",
+        "Which charades do Bilbo and Gollum exchange when \
+dicsussing near the lake deep within the Misty Mountains?",
+        "Describe the encounter between the company of dwarves and cave trolls.",
+    ]
+    display_cli_notification("Testing embeddings")
+    for q in test_query:
+        display_cli_notification(f"\t{q}")
+        resu = vectorstore.similarity_search_with_score(query=q, k=5)
+        for chunk, score in resu:
+            text = chunk.page_content.replace("\n", " ")
+            display_cli_notification(f"\t\t{text}")
+            display_cli_notification(f"\t\t{chunk.metadata}")
+            display_cli_notification(f"\t\t{score}")
+            # display_cli_notification("")
+        display_cli_notification("")
+    input("Wait")
+
     # Select the chain type
     qa = select_chain(llm, vectorstore)
 

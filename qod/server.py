@@ -45,7 +45,7 @@ def root(_: Response, app_status: AppStatus = Depends(app_status)) -> AppStatus:
 @app.get("/setup", response_model=str)
 def setup_chat_session(
     llm_type: LLMType = LLMType.LLAMA2_13B,
-    embeddings_type: EmbeddingsType = EmbeddingsType.SENTENCE_TRANSFORMER_HF,
+    embeddings_type: EmbeddingsType = EmbeddingsType.MULTI_QA_MINI_LM_L6_COS_V1,
     chain_type: ChainType = ChainType.STUFFED,
     documents_directory: str = "docs",
     db_directory: Optional[str] = None,
