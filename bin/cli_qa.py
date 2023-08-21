@@ -4,8 +4,10 @@ from typing import Union, Optional, Tuple, Type
 from qod.base_data_types import BaseAttributeType
 import typer
 import sys
-import time
-import secrets
+
+# import time
+
+# import secrets
 
 from langchain.embeddings import (
     LlamaCppEmbeddings,
@@ -18,18 +20,21 @@ from langchain.chains.conversational_retrieval.base import (
     BaseConversationalRetrievalChain,
 )
 from langchain.vectorstores import Chroma
+from langchain.prompts import PromptTemplate
+from langchain import LLMChain
 
 from qod.embeddings_data_types import EmbeddingsType, EmbeddingsAttributes
 from qod.llm_data_types import LLMType, LLMAttributes
 from qod.chain_data_types import ChainType, ChainAttributes
 from qod.langchain_wrappers import get_llm, get_embeddings, get_chain, get_vectorstore
-from qod.chat_session import ChatSession
+
+# from qod.chat_session import ChatSession
 from qod.display_msg import (
     cli_input,
     display_error,
     display_cli_notification,
-    display_llm_notification,
-    display_chain_final,
+    #     display_llm_notification,
+    #     display_chain_final,
     display_chain_temp,
 )
 
@@ -164,43 +169,24 @@ def main():
     vectorstore, db_directory = load_create_vectorstore(embeddings=embedding)
     display_cli_notification(f"Embeddings stored at: {db_directory}")
 
-    #     test_query = [
-    #         "Who is Marc Joliveau?",
-    #         "Which charades do Bilbo and Gollum exchange when \
-    # dicsussing near the lake deep within the Misty Mountains?",
-    #         "Describe the encounter between the company of dwarves and cave trolls.",
-    #     ]
-    #     display_cli_notification("Testing embeddings")
-    #     for q in test_query:
-    #         display_cli_notification(f"\t{q}")
-    #         resu = vectorstore.similarity_search_with_score(query=q, k=5)
-    #         for chunk, score in resu:
-    #             text = chunk.page_content.replace("\n", " ")
-    #             display_cli_notification(f"\t\t{text}")
-    #             display_cli_notification(f"\t\t{chunk.metadata}")
-    #             display_cli_notification(f"\t\t{score}")
-    #             # display_cli_notification("")
-    #         display_cli_notification("")
-    #     input("Wait")
+    # # Select the chain type
+    # qa = select_chain(llm, vectorstore)
 
-    # Select the chain type
-    qa = select_chain(llm, vectorstore)
+    # chat_session = ChatSession(
+    #     csid="csid_" + secrets.token_hex(12),
+    #     llm=llm,
+    #     embeddings=embedding,
+    #     chain=qa,
+    #     vectorstore=vectorstore,
+    #     history=[],
+    #     documents_directory="",  # TODO
+    #     db_directory=db_directory,
+    #     llm_type=1,  # TODO
+    #     embeddings_type=1,  # TODO
+    #     chain_type=1,  # TODO
+    # )
 
-    chat_session = ChatSession(
-        csid="csid_" + secrets.token_hex(12),
-        llm=llm,
-        embeddings=embedding,
-        chain=qa,
-        vectorstore=vectorstore,
-        history=[],
-        documents_directory="",  # TODO
-        db_directory=db_directory,
-        llm_type=1,  # TODO
-        embeddings_type=1,  # TODO
-        chain_type=1,  # TODO
-    )
-
-    chat_history = []
+    # chat_history = []
     display_cli_notification(
         "---------------------------------------------------------------------"
     )
@@ -220,6 +206,31 @@ questions."
         "---------------------------------------------------------------------"
     )
 
+    ###
+    # Setting up the LLM chains
+    qa_reduce_prompt = PromptTemplate.from_template(
+        "Use the following portion of a long document to see "
+        "if any of the text is relevant to answer the question.\n"
+        "Return any relevant text verbatim.\n\n"
+        'CONTEXTt: "{context}"\n'
+        'QUESTION: "{question}"\n\n'
+        "Relevant text, if any:"
+    )
+    llm_reduce = LLMChain(prompt=qa_reduce_prompt, llm=llm)
+    # qa_combine_prompt = PromptTemplate.from_template(
+    #     "Given the following extracted parts of a long document "
+    #     "and a question, create a final answer.\n"
+    #     "If you don't know the answer, just say that you don't know. "
+    #     "Don't try to make up an answer.\n\n"
+    #     'QUESTION: "{question}"\n\n'
+    #     'CONTENT: "{contents}"\n\n'
+    #     "FINAL ANSWER: "
+    # )
+    # llm_combine = LLMChain(prompt=qa_combine_prompt, llm=llm)
+
+    ###
+    # chat_history = []]
+
     while True:
         query = cli_input("Question: ")
 
@@ -228,27 +239,41 @@ questions."
             sys.exit()
         if query == "":
             continue
-        if query == "flush":
-            display_cli_notification("Erasing the history")
-            chat_history = []
-            continue
+        # if query == "flush":
+        #     display_cli_notification("Erasing the history")
+        #     chat_history = []
+        #     continue
         if query == "llm":
             llm = select_llm()
             continue
-        if query == "chain":
-            qa = select_chain(llm, vectorstore)
-            continue
+        # if query == "chain":
+        #     qa = select_chain(llm, vectorstore)
+        #     continue
 
-        answer_start = time.time()
-        display_llm_notification(msg="", reset=False)
-        result = chat_session.chain({"question": query, "chat_history": chat_history})
-        answer_end = time.time()
-        display_chain_final(f"\nAnswer: {result['answer']}")
-        display_chain_final(f"Time: {round(answer_end - answer_start, 2)} sec")
-        display_chain_temp("sources: ")
-        for s in result.get("source_documents", []):
-            display_chain_temp(f"    {s}")
-        chat_history.append((query, result["answer"]))
+        # answer_start = time.time()
+        # display_llm_notification(msg="", reset=False)
+        # result = chat_session.chain({"question": query, "chat_history": chat_history})
+        # answer_end = time.time()
+        # display_chain_final(f"\nAnswer: {result['answer']}")
+        # display_chain_final(f"Time: {round(answer_end - answer_start, 2)} sec")
+        # display_chain_temp("sources: ")
+        # for s in result.get("source_documents", []):
+        #     display_chain_temp(f"    {s}")
+        #
+        documents = vectorstore.similarity_search_with_score(query=query, k=3)
+        # answers = []
+
+        for index, document in enumerate(documents):
+            display_cli_notification(f"Reducing document {index}/{len(documents)}:")
+            context = document.page_content
+            my_prompt = qa_reduce_prompt.format(context=context, question=query)
+            nb_tokens = llm.get_num_tokens(my_prompt)
+            display_chain_temp(f"Intermediary prompt:\n{my_prompt}")
+            display_chain_temp(f"# tokens: {nb_tokens}")
+            answer = llm_reduce.run({"context": context, "question": query})
+            display_cli_notification(f"Answer: {answer}")
+
+        # chat_history.append((query, result["answer"])) # TODO
 
 
 if __name__ == "__main__":

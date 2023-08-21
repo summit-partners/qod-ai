@@ -45,3 +45,7 @@ cli:
 .PHONY: cli_sum
 cli_sum:
 	$(POETRY) python -m bin.cli_sum
+
+.PHONY: cli_qa
+cli_qa:
+	$(POETRY) python -m bin.cli_qa
